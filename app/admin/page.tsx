@@ -3,10 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,10 +14,11 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from "./components/form";
+
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/table";
+import { Textarea } from "./components/textarea";
+import { useToast } from "./components/use-toast";
 
 const productFormSchema = z.object({
   name: z.string().min(2, { message: "Product name must be at least 2 characters." }),
@@ -64,14 +62,14 @@ const AdminDashboard = () => {
 
   async function fetchOrders() {
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id, created_at, total_amount, payment_slip_url");
+        const { data, error } = await supabase
+          .from("orders")
+          .select("id, created_at, total_amount, payment_slip_url");
 
       if (error) {
         throw error;
       }
-      setOrders(data || []);
+      setOrders(data as Order[] || []);
     } catch (error: any) {
       toast({
         title: "Error fetching orders",
@@ -133,101 +131,106 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <h1 className="text-4xl font-bold mb-8 text-center">Admin Dashboard</h1>
 
-      <Tabs defaultValue="manage-products" className="w-full max-w-4xl mx-auto" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="manage-products">Manage Products</TabsTrigger>
-          <TabsTrigger value="view-orders">View Orders</TabsTrigger>
-        </TabsList>
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="grid w-full grid-cols-2 bg-gray-700 rounded-md p-1 mb-4">
+          <button
+            onClick={() => setActiveTab("manage-products")}
+            className={`px-4 py-2 rounded-md text-sm font-medium focus:outline-none ${activeTab === "manage-products" ? "bg-purple-600" : "hover:bg-gray-600"}`}
+          >
+            Manage Products
+          </button>
+          <button
+            onClick={() => setActiveTab("view-orders")}
+            className={`px-4 py-2 rounded-md text-sm font-medium focus:outline-none ${activeTab === "view-orders" ? "bg-purple-600" : "hover:bg-gray-600"}`}
+          >
+            View Orders
+          </button>
+        </div>
 
-        <TabsContent value="manage-products">
-          <Card className="bg-gray-800 border-gray-700 text-white">
-            <CardHeader>
-              <CardTitle>Upload New Product</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Product Name</FormLabel>
-                        <FormControl>
-                          <Input className="bg-gray-700 border-gray-600 text-white" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            className="bg-gray-700 border-gray-600 text-white"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price</FormLabel>
-                        <FormControl>
-                          <Input
-                            className="bg-gray-700 border-gray-600 text-white"
-                            type="number"
-                            step="0.01"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="image"
-                    render={({ field: { value, onChange, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Product Image</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...fieldProps}
-                            className="bg-gray-700 border-gray-600 text-white file:text-white"
-                            type="file"
-                            accept="image/*"
-                            onChange={(event) => onChange(event.target.files)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
-                    Upload Product
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {activeTab === "manage-products" && (
+          <div className="bg-gray-800 border border-gray-700 text-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-semibold mb-4">Upload New Product</h2>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="block text-sm font-medium text-gray-300">Product Name</FormLabel>
+                      <FormControl>
+                        <input className="mt-1 block w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:ring-purple-500 focus:border-purple-500" {...field} />
+                      </FormControl>
+                      <FormMessage className="text-red-400 text-sm mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="block text-sm font-medium text-gray-300">Description</FormLabel>
+                      <FormControl>
+                        <textarea
+                          className="mt-1 block w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:ring-purple-500 focus:border-purple-500"
+                          rows={4}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-red-400 text-sm mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="block text-sm font-medium text-gray-300">Price</FormLabel>
+                      <FormControl>
+                        <input
+                          className="mt-1 block w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:ring-purple-500 focus:border-purple-500"
+                          type="number"
+                          step="0.01"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-red-400 text-sm mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field: { value, onChange, ...fieldProps } }) => (
+                    <FormItem>
+                      <FormLabel className="block text-sm font-medium text-gray-300">Product Image</FormLabel>
+                      <FormControl>
+                        <input
+                          {...fieldProps}
+                          className="mt-1 block w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-500 file:text-white hover:file:bg-purple-600"
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => onChange(event.target.files)}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-red-400 text-sm mt-1" />
+                    </FormItem>
+                  )}
+                />
+                <button type="submit" className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                  Upload Product
+                </button>
+              </form>
+            </Form>
+          </div>
+        )}
 
-        <TabsContent value="view-orders">
-          <Card className="bg-gray-800 border-gray-700 text-white">
-            <CardHeader>
-              <CardTitle>Recent Orders</CardTitle>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "view-orders" && (
+          <div className="bg-gray-800 border border-gray-700 text-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-semibold mb-4">Recent Orders</h2>
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -267,10 +270,10 @@ const AdminDashboard = () => {
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
