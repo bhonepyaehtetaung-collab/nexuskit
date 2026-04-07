@@ -12,7 +12,7 @@ export default function CheckoutPage() {
 
   const [methods, setMethods] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<any>(null);
-  const [customerInfo, setCustomerInfo] = useState<any>({});
+  const [customerInfo, setCustomerInfo] = useState<any>({ name: "", email: "", contact: "" });
   const [issubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -26,11 +26,8 @@ export default function CheckoutPage() {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMethod) return alert("ကျေးဇူးပြု၍ ငွေပေးချေမည့်စနစ်ကို ရွေးချယ်ပေးပါ");
-    
     setIsSubmitting(true);
-    // Order Table ထဲသို့ သိမ်းဆည်းမည့် Logic များ ဤနေရာတွင် ဆက်လက်ရေးသားနိုင်ပါသည်...
-    // ဥပမာ - await supabase.from('orders').insert([...]);
-    
+    // Order Logic Here
     alert("Order တင်ခြင်း အောင်မြင်ပါသည်။");
     dispatch({ type: "CLEAR_CART" });
     router.push("/success");
@@ -39,103 +36,86 @@ export default function CheckoutPage() {
   if (cart.length === 0) return <div className="p-20 text-center font-bold">Cart ထဲတွင် ပစ္စည်းမရှိသေးပါ။</div>;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-4 md:p-10">
-      <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10">
+    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-10 px-4">
+      <div className="max-w-4xl mx-auto flex flex-col gap-8">
         
-        {/* LEFT: Payment & Summary */}
-        <div className="space-y-8 order-2 lg:order-1">
-          <section>
-            <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
-              <span className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-sm">1</span>
-              Payment Methods
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {methods.map((m) => (
-                <div 
-                  key={m.id}
-                  onClick={() => setSelectedMethod(m)}
-                  className={`relative cursor-pointer p-5 rounded-3xl border-2 transition-all ${
-                    selectedMethod?.id === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/5 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-full max-w-[200px] aspect-square bg-white rounded-2xl p-3 mb-4 shadow-2xl overflow-hidden">
-                      <img 
-                        src={m.qr_image_url || "/placeholder-qr.png"} 
-                        alt="Payment QR" 
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <h3 className="text-lg font-bold text-emerald-400">{m.provider_name}</h3>
-                    <p className="text-gray-400 font-mono tracking-wider">{m.account_details}</p>
-                  </div>
-                </div>
-              ))}
+        {/* 1. Order Summary Card */}
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+          <h2 className="text-xl font-bold mb-4">သင်ဝယ်ယူမည့် ပစ္စည်းများ</h2>
+          {cart.map((item) => (
+            <div key={item.id} className="flex justify-between border-b border-white/5 py-3 text-sm">
+              <span>{item.name} x {item.quantity}</span>
+              <span className="text-indigo-400 font-bold">${(item.price * item.quantity).toFixed(2)}</span>
             </div>
-          </section>
+          ))}
+          <div className="flex justify-between pt-4 text-xl font-black text-emerald-400">
+            <span>Total:</span>
+            <span>${cart.reduce((a, b) => a + (b.price * b.quantity), 0).toFixed(2)}</span>
+          </div>
         </div>
 
-        {/* RIGHT: Customer Form */}
-        <div className="order-1 lg:order-2">
-          <div className="sticky top-10 space-y-8">
-            <section className="bg-white/5 p-6 md:p-8 rounded-[2rem] border border-white/10 shadow-xl">
-              <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
-                <span className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-sm">2</span>
-                Customer Info
-              </h2>
-              <form onSubmit={handleCheckout} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Full Name</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="Enter your name"
-                    className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                    onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Email Address</label>
-                  <input 
-                    required
-                    type="email" 
-                    placeholder="example@gmail.com"
-                    className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                    onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Telegram / WhatsApp</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="@username or phone"
-                    className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                    onChange={(e) => setCustomerInfo({...customerInfo, contact: e.target.value})}
-                  />
-                </div>
-
-                <div className="pt-6 border-t border-white/5 mt-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <span className="text-gray-400 font-bold uppercase text-xs">Total Amount</span>
-                    <span className="text-3xl font-black text-indigo-400">
-                      ${cart.reduce((a, b) => a + (b.price * b.quantity), 0).toFixed(2)}
-                    </span>
+        {/* 2. Payment Methods - အဓိက ပြင်ဆင်ထားသော အပိုင်း */}
+        <div>
+          <h2 className="text-xl font-bold mb-4">ငွေပေးချေမှု ရွေးချယ်ပါ</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {methods.map((m) => (
+              <div 
+                key={m.id}
+                onClick={() => setSelectedMethod(m)}
+                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                  selectedMethod?.id === m.id ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div className="flex flex-col items-center">
+                  {/* QR Image - Responsive အဖြစ်ဆုံး ပုံစံ */}
+                  <div className="w-32 h-32 bg-white rounded-xl p-2 mb-3">
+                    <img 
+                      src={m.qr_image_url || "/placeholder-qr.png"} 
+                      className="w-full h-full object-contain" 
+                      alt="QR"
+                    />
                   </div>
-                  <button 
-                    disabled={issubmitting}
-                    type="submit" 
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 py-5 rounded-2xl font-black text-lg shadow-lg shadow-indigo-600/20 active:scale-[0.98] transition-all disabled:opacity-50"
-                  >
-                    {issubmitting ? "Processing..." : "Confirm & Send Receipt"}
-                  </button>
-                  <p className="text-[10px] text-center text-gray-500 mt-4 uppercase font-bold tracking-widest">
-                    🔒 Secured by NexusKit Encryption
-                  </p>
+                  <span className="font-bold text-sm">{m.provider_name}</span>
+                  <span className="text-xs text-gray-400 font-mono">{m.account_details}</span>
                 </div>
-              </form>
-            </section>
+              </div>
+            ))}
           </div>
+        </div>
+
+        {/* 3. Customer Info Form */}
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-10">
+          <h2 className="text-xl font-bold mb-6">အချက်အလက် ဖြည့်သွင်းပါ</h2>
+          <form onSubmit={handleCheckout} className="space-y-4">
+            <input 
+              required
+              type="text" 
+              placeholder="အမည်"
+              className="w-full bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-indigo-500"
+              onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
+            />
+            <input 
+              required
+              type="email" 
+              placeholder="Email"
+              className="w-full bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-indigo-500"
+              onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+            />
+            <input 
+              required
+              type="text" 
+              placeholder="Telegram / Phone"
+              className="w-full bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-indigo-500"
+              onChange={(e) => setCustomerInfo({...customerInfo, contact: e.target.value})}
+            />
+            <button 
+              type="submit"
+              disabled={issubmitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-black text-lg mt-4 disabled:opacity-50"
+            >
+              {issubmitting ? "Processing..." : "Order တင်မည်"}
+            </button>
+          </form>
         </div>
 
       </div>
