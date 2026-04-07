@@ -21,7 +21,8 @@ type CartAction =
   | { type: "ADD_TO_CART"; payload: any; quantity?: number }
   | { type: "REMOVE_FROM_CART"; payload: string }
   | { type: "UPDATE_QUANTITY"; payload: { id: string; quantity: number } }
-  | { type: "CLEAR_CART" };
+  | { type: "CLEAR_CART" }
+  { type: "INIT_CART"; payload: any };
 
 // --- Context ---
 const CartContext = createContext<{ cart: CartState; dispatch: React.Dispatch<CartAction> } | undefined>(undefined);
