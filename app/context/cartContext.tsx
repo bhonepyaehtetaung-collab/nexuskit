@@ -16,13 +16,12 @@ export type CartItem = {
 
 type CartState = CartItem[];
 
-type CartAction =
-  | { type: "INIT_CART"; payload: CartItem[] }
-  | { type: "ADD_TO_CART"; payload: any; quantity?: number }
+type Action =
+  | { type: "ADD_TO_CART"; payload: any }
   | { type: "REMOVE_FROM_CART"; payload: string }
   | { type: "UPDATE_QUANTITY"; payload: { id: string; quantity: number } }
   | { type: "CLEAR_CART" }
-  { type: "INIT_CART"; payload: any };
+  | { type: "INIT_CART"; payload: any };
 
 // --- Context ---
 const CartContext = createContext<{ cart: CartState; dispatch: React.Dispatch<CartAction> } | undefined>(undefined);
