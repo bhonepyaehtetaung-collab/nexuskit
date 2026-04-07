@@ -36,7 +36,7 @@ export default function ProductDetail() {
   const handleAddToCart = () => {
     if (product) {
       // Cart ထဲသို့ Quantity ပါ တစ်ခါတည်း ပို့ပေးပါမည်
-      dispatch({ type: "ADD_TO_CART", payload: product, quantity: quantity });
+      dispatch({ type: "ADD_TO_CART", payload: { ...product, quantity: quantity } });
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     }
