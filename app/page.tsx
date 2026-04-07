@@ -1,151 +1,70 @@
-"use client";
+import { createClient } from "@/utils/supabase/server";
+import ProductCard from "./components/ProductCard";
+import Link from "next/link";
 
-import { useEffect, useState } from "react";
-import { createClient } from "../utils/supabase/client";
-import { useCart } from "./context/cartContext";
+// ကြယ်ပွင့် (*) ကြားက စာသားကို Gradient အရောင်ပြောင်းပေးမည့် Function
+const renderColoredText = (text: string) => {
+  if (!text) return null;
+  const parts = text.split('*');
+  return (
+    <>
+      {parts.map((part, index) => 
+        index % 2 === 1 ? (
+          <span key={index} className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 bg-clip-text text-transparent font-extrabold">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </>
+  );
+};
 
-export default function Home() {
-  const [products, setProducts] = useState<any[]>([]);
-  const { addToCart } = useCart();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+export default async function HomePage() {
+  const supabase = await createClient();
+  
+  // Database မှ Product များနှင့် Admin Settings များကို ဆွဲယူခြင်း
+  const [productsRes, settingsRes] = await Promise.all([
+    supabase.from("products").select("*").order("created_at", { ascending: false }).limit(6),
+    supabase.from("site_settings").select("*").eq("id", 1).single()
+  ]);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const supabase = createClient();
-      setLoading(true);
-      setError(null);
-      try {
-        let query = supabase.from("products").select("*");
-
-        if (searchTerm) {
-          query = query.or(
-            `title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
-          );
-        }
-
-        if (selectedCategory) {
-          query = query.eq("category", selectedCategory);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-          throw error;
-        }
-        setProducts(data || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, [searchTerm, selectedCategory]);
-
-  const categories = [
-    "All",
-    "UI Kits",
-    "Templates",
-    "3D Assets",
-    "Fonts",
-    "Icons",
-  ];
-
-  const handleCategoryClick = (category: string | null) => {
-    setSelectedCategory(category);
-  };
-
-  if (loading) {
-    return <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-white font-sans antialiased flex justify-center items-center">Loading products...</div>;
-  }
-
-  if (error) {
-    return <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-white font-sans antialiased flex justify-center items-center text-red-500">Error: {error}</div>;
-  }
+  const products = productsRes.data || [];
+  const settings = settingsRes.data || {};
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-white font-sans antialiased">
-      <section className="relative pt-40 pb-20 px-4 text-center bg-transparent">
-        <h1 className="text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-600 sm:text-7xl md:text-8xl leading-tight drop-shadow-lg">
-          NexusKit: Your Central Hub for Digital Assets
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* --- HERO SECTION --- */}
+      <div className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden text-center space-y-8 px-6">
+        {/* Premium Background Glow Effect */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+        
+        <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tight z-10 relative">
+          {renderColoredText(settings.hero_title || "Crafted for *Modern Creators*")}
         </h1>
-        <p className="mt-6 text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-          Discover, trade, and elevate your projects with a curated selection of trending digital assets, premium templates, and powerful tools designed for the modern creator.
+        <p className="text-gray-400 max-w-2xl mx-auto text-lg md:text-xl font-medium z-10 relative">
+          {settings.hero_subtitle || "Elevate your creative workflow with top-tier UI kits, templates, and graphics."}
         </p>
-        <div className="mt-12 w-full max-w-xl mx-auto relative">
-          <input
-            type="text"
-            placeholder="Search products..."
-            className="w-full p-4 pl-12 rounded-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent transition duration-300 ease-in-out text-lg shadow-lg"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <svg
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            ></path>
-          </svg>
+        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-8 z-10 relative">
+          <Link href="/products" className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold px-10 py-4 rounded-xl transition-all shadow-lg shadow-indigo-500/25 text-lg">
+            {settings.home_explore_button || "Explore Assets"}
+          </Link>
         </div>
-        <div className="mt-8 flex flex-wrap justify-center gap-4">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() =>
-                handleCategoryClick(category === "All" ? null : category)
-              }
-              className={`px-6 py-3 rounded-full text-lg font-semibold shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-500 focus:ring-opacity-50
-                ${
-                  selectedCategory === category ||
-                  (category === "All" && !selectedCategory)
-                    ? "bg-purple-700 text-white"
-                    : "bg-gray-800 border border-gray-600 text-gray-200 hover:border-purple-400 hover:text-purple-300"
-                }`}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-      </section>
+      </div>
 
-      {/* Products Grid */}
-      <section className="py-16 px-4">
-        <h2 className="text-5xl font-extrabold text-center mb-16 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-600 drop-shadow-lg">{selectedCategory ? `${selectedCategory} Products` : "Premium Assets"}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10 max-w-7xl mx-auto">
-          {products.map((product) => (
-            <div key={product.id} className="relative bg-gray-800 rounded-2xl shadow-xl overflow-hidden transform hover:scale-105 transition duration-500 ease-in-out group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl opacity-0 group-hover:opacity-75 transition duration-500 ease-in-out blur animate-tilt"></div>
-              <div className="relative bg-gray-900 rounded-2xl p-0.5">
-                <img src={product.image_url} alt={product.name} className="w-full h-56 object-cover rounded-t-2xl" />
-                <div className="p-7">
-                  <h3 className="text-3xl font-bold mb-3 text-white group-hover:text-purple-300 transition duration-300 ease-in-out">{product.name}</h3>
-                  <p className="text-gray-400 text-base mb-5 leading-relaxed">{product.description}</p>
-                  <div className="flex items-center justify-between mt-6">
-                    <span className="text-4xl font-extrabold text-green-500">${product.price}</span>
-                    <button
-                      onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
-                      className="relative px-7 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition duration-300 ease-in-out shadow-lg transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-purple-500 focus:ring-opacity-70">
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* --- FEATURED PRODUCTS SECTION --- */}
+      <div className="max-w-7xl mx-auto px-6 pb-32 relative z-10">
+        <div className="flex justify-between items-end mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold text-white">
+            {settings.home_featured_title || "Featured Products"}
+          </h2>
+          <Link href="/products" className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors">View All →</Link>
         </div>
-      </section>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {products.map(product => <ProductCard key={product.id} product={product} />)}
+        </div>
+      </div>
     </div>
   );
 }

@@ -11,12 +11,12 @@ export function createClient() {
     {
       cookies: {
         get: async (name: string) => {
-          const cookie = await cookieStore.get(name);
+          const cookie = (await cookieStore).get(name);
           return cookie?.value;
         },
         set: async (name: string, value: string, options: any) => {
           try {
-            await cookieStore.set({ name, value, ...options });
+            (await cookieStore).set({ name, value, ...options });
           } catch (error) {
             // The `cookies()` helper can be called only when a Next.js render is
             // happening, and only from a Server Component or Route Handler.
@@ -25,7 +25,7 @@ export function createClient() {
         },
         remove: async (name: string, options: any) => {
           try {
-            await cookieStore.set({ name, value: "", ...options });
+            (await cookieStore).set({ name, value: "", ...options });
           } catch (error) {
             // The `cookies()` helper can be called only when a Next.js render is
             // happening, and only from a Server Component or Route Handler.

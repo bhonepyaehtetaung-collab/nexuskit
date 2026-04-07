@@ -1,82 +1,118 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
 
-interface CartItem {
+// --- Types ---
+export type CartItem = {
   id: string;
   name: string;
-  price: number;
-  image_url: string;
+  price: number | string;
+  image: string;
+  product_type?: string;
+  required_fields?: string[];
+  subscription_days?: number;
   quantity: number;
-}
+};
 
-interface CartContextType {
-  cartItems: CartItem[];
-  addToCart: (item: Omit<CartItem, 'quantity'>) => void;
-  removeFromCart: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
-  clearCart: () => void;
-  cartItemCount: number;
-}
+type CartState = CartItem[];
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+type CartAction =
+  | { type: "INIT_CART"; payload: CartItem[] }
+  | { type: "ADD_TO_CART"; payload: any; quantity?: number }
+  | { type: "REMOVE_FROM_CART"; payload: string }
+  | { type: "UPDATE_QUANTITY"; payload: { id: string; quantity: number } }
+  | { type: "CLEAR_CART" };
 
-export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+// --- Context ---
+const CartContext = createContext<{ cart: CartState; dispatch: React.Dispatch<CartAction> } | undefined>(undefined);
 
-  const addToCart = (item: Omit<CartItem, 'quantity'>) => {
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((cartItem) => cartItem.id === item.id);
-      if (existingItem) {
-        return prevItems.map((cartItem) =>
-          cartItem.id === item.id
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
-        );
+// --- Reducer (The Brain) ---
+const cartReducer = (state: CartState, action: CartAction): CartState => {
+  let newState: CartState;
+
+  switch (action.type) {
+    case "INIT_CART":
+      // Page စပွင့်တဲ့အခါ LocalStorage ထဲက Data တွေကို ပြန်ထည့်ပေးပါမည်
+      return action.payload;
+
+    case "ADD_TO_CART":
+      const existingItemIndex = state.findIndex(item => item.id === action.payload.id);
+      // သေချာတိကျစေရန် Number ပြောင်းပြီးမှ ပေါင်းပါမည်
+      const qtyToAdd = Number(action.quantity) || 1;
+
+      if (existingItemIndex > -1) {
+        // ပစ္စည်းရှိပြီးသားဖြစ်ပါက လက်ရှိအရေအတွက်ပေါ်တွင်သာ အတိအကျ ပေါင်းထည့်မည် (Fix for Quantity Bug)
+        newState = [...state];
+        const currentQty = Number(newState[existingItemIndex].quantity) || 0;
+        newState[existingItemIndex] = {
+          ...newState[existingItemIndex],
+          quantity: currentQty + qtyToAdd
+        };
       } else {
-        return [...prevItems, { ...item, quantity: 1 }];
+        // ပစ္စည်းအသစ်ဖြစ်ပါက Cart ထဲသို့ အသစ်ထည့်မည်
+        newState = [...state, { ...action.payload, quantity: qtyToAdd }];
       }
-    });
-  };
+      break;
 
-  const removeFromCart = (id: string) => {
-    setCartItems((prevItems) => prevItems.filter((item) => item.id !== id));
-  };
+    case "REMOVE_FROM_CART":
+      newState = state.filter(item => item.id !== action.payload);
+      break;
 
-  const updateQuantity = (id: string, quantity: number) => {
-    setCartItems((prevItems) =>
-      prevItems.map((item) =>
-        item.id === id ? { ...item, quantity } : item
-      ).filter(item => item.quantity > 0) // Remove item if quantity drops to 0 or below
-    );
-  };
+    case "UPDATE_QUANTITY":
+      // Quantity ကို အတိအကျ ပြင်ဆင်သည့်အခါ (ဥပမာ - Cart မျက်နှာပြင်တွင် အတိုး/အလျှော့လုပ်လျှင်)
+      newState = state.map(item =>
+        item.id === action.payload.id
+          ? { ...item, quantity: Math.max(1, Number(action.payload.quantity)) } // အနည်းဆုံး ၁ ခု ရှိရမည်
+          : item
+      );
+      break;
 
-  const clearCart = () => {
-    setCartItems([]);
-  };
+    case "CLEAR_CART":
+      // Checkout အောင်မြင်သွားလျှင် Cart ကို ရှင်းလင်းမည်
+      newState = [];
+      break;
 
-  const cartItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
+    default:
+      return state;
+  }
+
+  // --- LocalStorage Persistence ---
+  // State ပြောင်းလဲသွားတိုင်း Browser ရဲ့ LocalStorage ထဲကို အလိုအလျောက် Save လုပ်ပေးပါမည်
+  if (action.type !== "INIT_CART" && typeof window !== "undefined") {
+    localStorage.setItem("nexuskit_cart", JSON.stringify(newState));
+  }
+
+  return newState;
+};
+
+// --- Provider ---
+export const CartProvider = ({ children }: { children: ReactNode }) => {
+  const [cart, dispatch] = useReducer(cartReducer, []);
+
+  // Component Mount ဖြစ်သည့်အခါ LocalStorage ထဲတွင် မှတ်ထားသော Cart ရှိမရှိ စစ်ဆေးပြီး ဆွဲယူပါမည်
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem("nexuskit_cart");
+      if (savedCart) {
+        dispatch({ type: "INIT_CART", payload: JSON.parse(savedCart) });
+      }
+    } catch (error) {
+      console.error("Failed to parse cart from localStorage", error);
+    }
+  }, []);
 
   return (
-    <CartContext.Provider
-      value={{
-        cartItems,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        cartItemCount,
-      }}
-    >
+    <CartContext.Provider value={{ cart, dispatch }}>
       {children}
     </CartContext.Provider>
   );
 };
 
+// --- Custom Hook ---
 export const useCart = () => {
   const context = useContext(CartContext);
   if (!context) {
-    throw new Error('useCart must be used within a CartProvider');
+    throw new Error("useCart must be used within a CartProvider");
   }
   return context;
 };

@@ -1,58 +1,108 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useCart } from "../context/cartContext";
+import { usePathname } from "next/navigation";
+import { useCart } from "@/app/context/cartContext";
 
 export default function Navbar() {
-  const { cartItemCount } = useCart();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  
+  const { cart } = useCart();
+
+  // Cart ထဲက ပစ္စည်းတစ်ခုချင်းစီရဲ့ Quantity အားလုံးကို ပေါင်းခြင်း
+  const totalItems = cart.reduce((total, item) => total + (item.quantity || 1), 0);
+
+  // Scroll လုပ်တဲ့အခါ Navbar Background အရောင်ပြောင်းရန်
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // 👈 My Account လင့်ခ် ထပ်တိုးထားသော နေရာ
+  const navLinks = [
+    { name: "Home", path: "/" },
+    { name: "Shop", path: "/products" },
+    { name: "About", path: "/about" },
+    { name: "Contact", path: "/contact" },
+    { name: "My Account", path: "/my-account" }, 
+  ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-10 backdrop-filter backdrop-blur-lg bg-opacity-30 bg-gray-800 p-4 flex justify-center items-center">
-      <ul className="flex space-x-8">
-        <li>
-          <Link href="/" className="text-lg text-white hover:text-purple-300 transition duration-300 ease-in-out">
-            Home
-          </Link>
-        </li>
-        <li>
-          <Link href="/products" className="text-lg text-white hover:text-purple-300 transition duration-300 ease-in-out">
-            Shop
-          </Link>
-        </li>
-        <li>
-          <Link href="#about" className="text-lg text-white hover:text-purple-300 transition duration-300 ease-in-out">
-            About
-          </Link>
-        </li>
-        <li>
-          <Link href="#contact" className="text-lg text-white hover:text-purple-300 transition duration-300 ease-in-out">
-            Contact
-          </Link>
-        </li>
-        <li>
-          <div className="relative">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6 text-white"
+    <header 
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+        isScrolled 
+        ? "bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/10 py-4 shadow-2xl" 
+        : "bg-transparent py-6"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+        
+        {/* Logo */}
+        <Link href="/" className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-600 hover:opacity-80 transition-opacity">
+          NexusKit
+        </Link>
+
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center space-x-8">
+          {navLinks.map((link) => (
+            <Link 
+              key={link.name} 
+              href={link.path} 
+              className={`text-sm font-bold uppercase tracking-wider transition-colors ${
+                pathname === link.path 
+                ? "text-indigo-400" 
+                : "text-gray-400 hover:text-white"
+              }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.25 3h1.386c.51 0 .955.343 1.023.832l.51 3.515A2.25 2.25 0 007.453 12H17.25a2.25 2.25 0 002.245-2.079L21.75 6.75m0 0h-3.513c-.161 0-.319.04-.465.114L17.25 6.75m0 0V4.75A2.25 2.25 0 0015 2.5h-2.25a2.25 2.25 0 00-2.25 2.25v2.75m3.75 7.5c.414 0 .75.336.75.75s-.336.75-.75.75-.75-.336-.75-.75.336-.75.75-.75zm-9.75 0c.414 0 .75.336.75.75s-.336.75-.75.75-.75-.336-.75-.75.336-.75.75-.75z"
-              />
-            </svg>
-            {cartItemCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                {cartItemCount}
+              {link.name}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Cart Icon & Mobile Menu Toggle */}
+        <div className="flex items-center space-x-6">
+          
+          <Link href="/cart" className="relative group flex items-center justify-center">
+            <span className="text-2xl group-hover:scale-110 transition-transform">🛒</span>
+            {totalItems > 0 && (
+              <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-[11px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#0a0a0a] shadow-lg shadow-indigo-500/50">
+                {totalItems}
               </span>
             )}
-          </div>
-        </li>
-      </ul>
-    </nav>
+          </Link>
+          
+          {/* Mobile Hamburger Icon */}
+          <button 
+            className="md:hidden text-2xl text-gray-400 hover:text-white transition-colors" 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? "✕" : "☰"}
+          </button>
+
+        </div>
+      </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/10 py-4 px-6 flex flex-col space-y-4 shadow-2xl">
+          {navLinks.map((link) => (
+            <Link 
+              key={link.name} 
+              href={link.path} 
+              onClick={() => setIsMobileMenuOpen(false)} 
+              className={`text-sm font-bold uppercase tracking-wider py-2 ${
+                pathname === link.path ? "text-indigo-400" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {link.name}
+            </Link>
+          ))}
+        </div>
+      )}
+    </header>
   );
 }
