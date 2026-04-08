@@ -743,9 +743,9 @@ export default function AdminDashboard() {
               </div>
 
               <div className="mb-4 sm:mb-6 bg-emerald-500/10 border border-emerald-500/20 p-4 sm:p-5 rounded-2xl">
-                 <label className="block text-xs sm:text-sm text-emerald-400 mb-2 font-bold flex items-center gap-2">
-                    <span>🔐</span> Secure Credentials / Admin Note
-                 </label>
+                 <label className="flex text-xs sm:text-sm text-emerald-400 mb-2 font-bold items-center gap-2">
+   <span>🔐</span> Secure Credentials / Admin Note
+</label>
                  <textarea 
                     rows={4} 
                     placeholder="Enter Email / Password here... (Visible to customer)" 
