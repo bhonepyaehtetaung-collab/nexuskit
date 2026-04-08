@@ -13,8 +13,6 @@ export default function CheckoutPage() {
   const [methods, setMethods] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<any>(null);
   const [customerInfo, setCustomerInfo] = useState<any>({ name: "", email: "", contact: "" });
-  
-  // 🌟 အသစ်ထည့်ထားသော Payment Slip State 🌟
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [issubmitting, setIsSubmitting] = useState(false);
 
@@ -26,7 +24,6 @@ export default function CheckoutPage() {
     fetchMethods();
   }, []);
 
-  // 🌟 Database သို့ အမှန်တကယ် Order တင်မည့် Function 🌟
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMethod) return alert("ကျေးဇူးပြု၍ ငွေပေးချေမည့်စနစ်ကို ရွေးချယ်ပေးပါ");
@@ -35,18 +32,17 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. Slip ပုံကို Supabase Storage ပေါ်သို့ အရင်တင်ခြင်း
+      // 1. Slip ပုံကို Supabase Storage (products bucket) ပေါ်သို့ အရင်တင်ခြင်း
       let slipUrl = null;
       const fileExt = slipFile.name.split('.').pop();
       const fileName = `slip_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("products") // Public ဖြစ်ပြီးသား products bucket ကိုပဲ သုံးထားပါသည်
+        .from("products") 
         .upload(fileName, slipFile);
 
       if (uploadError) throw uploadError;
 
-      // တင်ပြီးသားပုံရဲ့ Link ကို ယူခြင်း
       slipUrl = supabase.storage.from("products").getPublicUrl(fileName).data.publicUrl;
 
       // 2. Order Total တွက်ချက်ခြင်း
@@ -56,16 +52,40 @@ export default function CheckoutPage() {
       const { error: insertError } = await supabase.from("orders").insert([{
         customer_name: customerInfo.name,
         customer_email: customerInfo.email,
-        order_note: customerInfo.contact, // Telegram / ဖုန်းနံပါတ် စသည်
+        order_note: customerInfo.contact, 
         total_amount: totalAmount,
-        items: cart, // ခြင်းတောင်းထဲက ပစ္စည်းများ
-        status: "pending", // အစပိုင်းမှာ Pending ဖြင့် ဝင်မည်
-        slip_url: slipUrl // 🌟 Payment Slip Link ပါသွားပါပြီ
+        items: cart, 
+        status: "pending", 
+        slip_url: slipUrl 
       }]);
 
       if (insertError) throw insertError;
 
-      // 4. အောင်မြင်သွားပါက Cart ကိုဖျက်ပြီး Success Page သို့ သွားမည်
+      // 4. Telegram သို့ Notification လှမ်းပို့ခြင်း
+      try {
+        const botToken = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; 
+        const chatId = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID;
+
+        if (botToken && chatId) {
+          const tgMessage = `🚨 <b>New Order Received!</b>\n\n👤 <b>Name:</b> ${customerInfo.name}\n📧 <b>Email:</b> ${customerInfo.email}\n📞 <b>Contact:</b> ${customerInfo.contact}\n💰 <b>Total:</b> $${totalAmount}\n💳 <b>Method:</b> ${selectedMethod.provider_name}\n\n<a href="${slipUrl}">📎 View Payment Slip</a>`;
+          
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: tgMessage,
+              parse_mode: 'HTML'
+            })
+          });
+        } else {
+          console.log("Telegram API keys are not set in Environment Variables.");
+        }
+      } catch (tgError) {
+        console.error("Telegram Notification Failed:", tgError);
+      }
+
+      // 5. အောင်မြင်သွားပါက Cart ကိုဖျက်ပြီး Success Page သို့ သွားမည်
       dispatch({ type: "CLEAR_CART" });
       router.push("/success");
 
@@ -156,7 +176,7 @@ export default function CheckoutPage() {
               />
             </div>
 
-            {/* 🌟 ဤနေရာတွင် Payment Slip တင်ရန် နေရာ အသစ်ထည့်ထားပါသည် 🌟 */}
+            {/* Payment Slip Input */}
             <div className="pt-2">
               <label className="block text-xs sm:text-sm font-bold text-gray-300 mb-2">
                 ငွေလွှဲပြေစာ (Screenshot) တင်ရန် *
