@@ -5,16 +5,17 @@ import { CartProvider } from "./context/cartContext";
 import ConditionalUI from "./components/ConditionalUI";
 
 export const metadata: Metadata = {
-  title: "NexusKit | Premium Digital Assets",
-  description: "Premium digital assets, UI kits, and resources for modern creators.",
-  manifest: "/manifest.json",
+  title: "NexusKit",
+  description: "Premium Digital Assets & UI Kits",
+  manifest: "/manifest.json", // 👈 PWA App အတွက် မပါမဖြစ်
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "NexusKit",
   },
   icons: {
-    apple: "/icon-192x192.png",
+    icon: "/icon.png",   // 👈 Browser Tab (Favicon) အတွက်
+    apple: "/icon.png",  // 👈 iPhone/iPad တွေမှာ Add to Home Screen လုပ်ရင် ပေါ်ဖို့
   },
 };
 

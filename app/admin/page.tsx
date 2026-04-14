@@ -55,8 +55,36 @@ export default function AdminDashboard() {
   const [adminNote, setAdminNote] = useState("");
   const [viewCustomerOrder, setViewCustomerOrder] = useState<any>(null);
 
-  useEffect(() => { fetchData(true); }, []);
+  // 🌟 Real-time Notification State 🌟
+  const [notification, setNotification] = useState<{title: string, desc: string} | null>(null);
 
+  // 🌟 INITIAL LOAD 🌟
+  useEffect(() => { 
+    fetchData(true); 
+  }, []);
+
+  // 🌟 SUPABASE REAL-TIME ALERTS FOR ADMIN 🌟
+  useEffect(() => {
+    const channel = supabase.channel('admin-orders')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload: any) => {
+         setNotification({ title: "🎉 အော်ဒါအသစ် ဝင်လာပါပြီ!", desc: `Customer [${payload.new.customer_name}] ထံမှ အော်ဒါအသစ် ရောက်ရှိနေပါသည်။` });
+         fetchData(false); // Data ကို Auto Refresh ဆွဲမည်
+         setTimeout(() => setNotification(null), 5000);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload: any) => {
+         if (payload.new.status === 'pending' && payload.old.status === 'awaiting_payment') {
+             setNotification({ title: "📄 ပြေစာ ရရှိပါပြီ!", desc: `Customer [${payload.new.customer_name}] မှ ငွေလွှဲပြေစာ တင်လိုက်ပါသည်။` });
+             fetchData(false); // Auto Refresh
+             setTimeout(() => setNotification(null), 5000);
+         }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); }
+  }, []);
+
+
+  // --- ❌ ဒီ Function အထဲမှာ Hook (useState, useEffect) တွေ လုံးဝ မပါရပါဘူး ❌ ---
   const fetchData = async (isInitialLoad = false) => {
     if (isInitialLoad) setLoading(true);
     
@@ -88,9 +116,17 @@ export default function AdminDashboard() {
     setPaymentMethods(await fetchSafe("payment_methods"));
     setCategories(await fetchSafe("product_categories")); 
     setInfoFields(await fetchSafe("customer_info_fields"));
-    setSettings(await fetchSafe("site_settings", true));
-    setTeamMembers(await fetchSafe("team_members"));
     
+    // settings ထဲမှာ defaults တွေ အသေအချာပါလာအောင် fallback လုပ်ထားပါတယ်
+    const siteSettings = await fetchSafe("site_settings", true);
+    setSettings({
+       ...siteSettings,
+       enable_pay_later: siteSettings.enable_pay_later !== undefined ? siteSettings.enable_pay_later : true,
+       pay_later_label: siteSettings.pay_later_label || "ဝန်ဆောင်မှုအရင်ရယူပြီးမှ ငွေချေမည်",
+       pay_later_subtitle: siteSettings.pay_later_subtitle || "Setup အရင်လုပ်ပေးပါမည်။ အဆင်ပြေမှ ငွေလွှဲပါ။"
+    });
+    
+    setTeamMembers(await fetchSafe("team_members"));
     if (isInitialLoad) setLoading(false);
   };
 
@@ -260,7 +296,7 @@ export default function AdminDashboard() {
   const maxChartAmount = Math.max(...last7Days.map(d => d.amount), 10); 
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#0a0a0a] text-white">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#0a0a0a] text-white relative">
       
       {/* 📱 MOBILE HEADER & NAVIGATION */}
       <div className="md:hidden flex flex-col border-b border-white/10 bg-white/5 sticky top-0 z-40">
@@ -468,119 +504,139 @@ export default function AdminDashboard() {
            </div>
         )}
 
-        {/* --- SETTINGS TAB --- */}
+        {/* --- SETTINGS TAB (Includes the new Dynamic Checkout Settings) --- */}
         {activeTab === "settings" && (
-          <div className="space-y-8 sm:space-y-12 pb-10 sm:pb-20">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8">
+          <form onSubmit={handleSaveSettings} className="space-y-8 sm:space-y-12 pb-10 sm:pb-20">
+            
+            {/* 🌟 New Fully Dynamic Checkout System Section 🌟 */}
+            <div className="p-5 sm:p-8 rounded-2xl sm:rounded-[2rem] border border-emerald-500/20 bg-emerald-500/5 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-white/10 pb-4 gap-4">
+                    <h2 className="text-xl font-bold text-emerald-400">Checkout Flow Settings</h2>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={settings.enable_pay_later} onChange={e => setSettings({...settings, enable_pay_later: e.target.checked})} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                        <span className="ml-3 text-sm font-medium text-gray-300">Enable "Pay After Setup"</span>
+                    </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Pay Later Option Label</label>
+                        <input type="text" value={settings.pay_later_label || ""} onChange={e => setSettings({...settings, pay_later_label: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm" placeholder="e.g. ဝန်ဆောင်မှုအရင်ရယူပြီးမှ ငွေချေမည်" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Pay Later Subtitle</label>
+                        <input type="text" value={settings.pay_later_subtitle || ""} onChange={e => setSettings({...settings, pay_later_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm" placeholder="e.g. Setup အရင်လုပ်ပေးပါမည်။ အဆင်ပြေမှ ငွေလွှဲပါ။" />
+                    </div>
+                </div>
+            </div>
+
+            {/* VISUAL CMS HEADER */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[#111] p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 sticky top-[72px] md:top-0 z-30 shadow-2xl">
+                <div className="text-center md:text-left"><h2 className="text-xl sm:text-2xl font-bold text-white">Visual CMS</h2><p className="text-xs sm:text-sm text-gray-400 mt-1">Customize website text, links, and settings completely.</p></div>
+                <button type="submit" disabled={savingSettings} className="w-full md:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 p-3 sm:px-10 sm:py-4 rounded-xl font-bold shadow-lg transition-all text-sm sm:text-base">{savingSettings ? "Saving..." : "Save All Changes"}</button>
+            </div>
+            
+            {/* OTHER SETTINGS SECTIONS */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
                 
                 {/* Product Categories */}
                 <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 shadow-xl">
                     <h2 className="text-lg sm:text-xl font-bold mb-4 text-indigo-400">1. Product Categories (Shop Tabs)</h2>
-                    <form onSubmit={handleAddCategory} className="mb-6 bg-black/20 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-white/5 space-y-4">
-                        <input required type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Add Category" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm sm:text-base" />
+                    <div className="mb-6 bg-black/20 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-white/5 space-y-4">
+                        <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Add Category" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm sm:text-base" />
                         <label className="flex items-center space-x-3 cursor-pointer">
                             <input type="checkbox" checked={newCatHasSub} onChange={e => setNewCatHasSub(e.target.checked)} className="w-4 h-4 sm:w-5 sm:h-5 rounded text-indigo-600 bg-black/50 border-white/20" />
                             <span className="text-xs sm:text-sm text-gray-300 font-medium">Items require a Time Period</span>
                         </label>
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-xl font-bold transition-all text-sm sm:text-base">Add Category</button>
-                    </form>
-                    <div className="flex flex-wrap gap-2">{(categories || []).map(cat => (<div key={cat.id} className="bg-black/40 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center border border-white/5 shadow-sm text-xs sm:text-sm"><span className="mr-2 sm:mr-3">{cat.name} {cat.has_subscription && <span className="text-[10px] sm:text-xs text-indigo-400 font-bold ml-1">(Sub)</span>}</span><button onClick={() => handleDeleteRecord("product_categories", cat.id)} className="text-red-500 font-black hover:text-red-400 text-lg sm:text-base">×</button></div>))}</div>
+                        <button type="button" onClick={handleAddCategory} className="w-full bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-xl font-bold transition-all text-sm sm:text-base">Add Category</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">{(categories || []).map(cat => (<div key={cat.id} className="bg-black/40 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center border border-white/5 shadow-sm text-xs sm:text-sm"><span className="mr-2 sm:mr-3">{cat.name} {cat.has_subscription && <span className="text-[10px] sm:text-xs text-indigo-400 font-bold ml-1">(Sub)</span>}</span><button type="button" onClick={() => handleDeleteRecord("product_categories", cat.id)} className="text-red-500 font-black hover:text-red-400 text-lg sm:text-base">×</button></div>))}</div>
                 </div>
                 
                 {/* Info Fields Settings */}
                 <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 shadow-xl">
                     <h2 className="text-lg sm:text-xl font-bold mb-4 text-blue-400">2. Customer Checkout Fields</h2>
-                    <form onSubmit={handleAddInfoField} className="flex flex-col sm:flex-row gap-2 mb-4"><input required type="text" value={newInfoLabel} onChange={e => setNewInfoLabel(e.target.value)} placeholder="e.g. Telegram Username" className="flex-1 p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm sm:text-base" /><button type="submit" className="bg-blue-600 hover:bg-blue-700 p-3 sm:px-6 rounded-xl font-bold transition-all text-sm sm:text-base">Add</button></form>
-                    <div className="flex flex-wrap gap-2">{(infoFields || []).map(info => (<div key={info.id} className="bg-black/40 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center border border-white/5 shadow-sm text-xs sm:text-sm"><span className="mr-2 sm:mr-3">{info.label}</span><button onClick={() => handleDeleteRecord("customer_info_fields", info.id)} className="text-red-500 font-black hover:text-red-400 text-lg sm:text-base">×</button></div>))}</div>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-4"><input type="text" value={newInfoLabel} onChange={e => setNewInfoLabel(e.target.value)} placeholder="e.g. Telegram Username" className="flex-1 p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm sm:text-base" /><button type="button" onClick={handleAddInfoField} className="bg-blue-600 hover:bg-blue-700 p-3 sm:px-6 rounded-xl font-bold transition-all text-sm sm:text-base">Add</button></div>
+                    <div className="flex flex-wrap gap-2">{(infoFields || []).map(info => (<div key={info.id} className="bg-black/40 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center border border-white/5 shadow-sm text-xs sm:text-sm"><span className="mr-2 sm:mr-3">{info.label}</span><button type="button" onClick={() => handleDeleteRecord("customer_info_fields", info.id)} className="text-red-500 font-black hover:text-red-400 text-lg sm:text-base">×</button></div>))}</div>
                 </div>
 
                 {/* Payment Methods */}
                 <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 shadow-xl col-span-1 xl:col-span-2">
                     <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6 text-emerald-400">3. Payment Methods (Dynamic Checkout)</h2>
-                    <form onSubmit={handleAddPaymentMethod} className="space-y-4 mb-6 bg-black/20 p-4 sm:p-6 rounded-2xl border border-white/5">
+                    <div className="space-y-4 mb-6 bg-black/20 p-4 sm:p-6 rounded-2xl border border-white/5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                            <input required type="text" value={newPayment.provider_name} onChange={e => setNewPayment({...newPayment, provider_name: e.target.value})} placeholder="Provider (e.g. KBZPay)" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm sm:text-base" />
-                            <input required type="text" value={newPayment.account_details} onChange={e => setNewPayment({...newPayment, account_details: e.target.value})} placeholder="Account Details" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none font-mono focus:border-emerald-500 text-sm sm:text-base" />
+                            <input type="text" value={newPayment.provider_name} onChange={e => setNewPayment({...newPayment, provider_name: e.target.value})} placeholder="Provider (e.g. KBZPay)" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm sm:text-base" />
+                            <input type="text" value={newPayment.account_details} onChange={e => setNewPayment({...newPayment, account_details: e.target.value})} placeholder="Account Details" className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none font-mono focus:border-emerald-500 text-sm sm:text-base" />
                         </div>
                         <div><label className="block text-[10px] sm:text-xs text-gray-500 mb-1 font-bold tracking-wider uppercase">Upload QR Code Image (Optional)</label><input type="file" onChange={e => setPmQrFile(e.target.files?.[0] || null)} className="w-full p-2 text-xs sm:text-sm bg-black/40 border border-white/10 rounded-xl" /></div>
-                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 p-3 rounded-xl font-bold mt-2 transition-all text-sm sm:text-base">Add Payment Method</button>
-                    </form>
+                        <button type="button" onClick={handleAddPaymentMethod} className="w-full bg-emerald-600 hover:bg-emerald-700 p-3 rounded-xl font-bold mt-2 transition-all text-sm sm:text-base">Add Payment Method</button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                         {(paymentMethods || []).map(pm => (
                             <div key={pm.id} className="bg-black/40 p-4 sm:p-5 rounded-2xl border border-white/5 relative group hover:border-emerald-500/50 transition-colors">
                                 <p className="font-bold text-sm sm:text-base text-emerald-400 mb-1">{pm.provider_name}</p><p className="text-[10px] sm:text-xs text-white font-mono break-all pr-8">{pm.account_details}</p>
                                 {pm.qr_url && <img src={pm.qr_url} className="mt-3 w-12 h-12 sm:w-16 sm:h-16 object-contain bg-white rounded p-1" />}
-                                <button onClick={() => handleDeleteRecord("payment_methods", pm.id)} className="absolute top-4 right-4 text-red-500 font-bold bg-red-500/10 p-2 sm:px-2 sm:py-1 rounded-md text-xs transition-colors sm:opacity-0 group-hover:opacity-100">🗑️</button>
+                                <button type="button" onClick={() => handleDeleteRecord("payment_methods", pm.id)} className="absolute top-4 right-4 text-red-500 font-bold bg-red-500/10 p-2 sm:px-2 sm:py-1 rounded-md text-xs transition-colors sm:opacity-0 group-hover:opacity-100">🗑️</button>
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
 
-            {/* VISUAL CMS FORM */}
-            <form onSubmit={handleSaveSettings} className="space-y-6 sm:space-y-8 pt-6 sm:pt-8 border-t border-white/10">
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[#111] p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 sticky top-[72px] md:top-0 z-30 shadow-2xl">
-                    <div className="text-center md:text-left"><h2 className="text-xl sm:text-2xl font-bold text-white">Visual CMS</h2><p className="text-xs sm:text-sm text-gray-400 mt-1">Customize website text, links, and images completely.</p></div>
-                    <button type="submit" disabled={savingSettings} className="w-full md:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 p-3 sm:px-10 sm:py-4 rounded-xl font-bold shadow-lg transition-all text-sm sm:text-base">{savingSettings ? "Saving..." : "Save Visual Changes"}</button>
+                <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
+                    <h3 className="text-lg sm:text-xl font-bold text-indigo-400 border-b border-white/10 pb-3 sm:pb-4">Home & Shop Pages</h3>
+                    <label className="block text-xs sm:text-sm text-gray-400">Hero Title</label><input type="text" value={settings.hero_title || ""} onChange={e => setSettings({...settings, hero_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Hero Subtitle</label><textarea rows={2} value={settings.hero_subtitle || ""} onChange={e => setSettings({...settings, hero_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-indigo-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Featured Products Title</label><input type="text" value={settings.home_featured_title || ""} onChange={e => setSettings({...settings, home_featured_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Explore Button Text</label><input type="text" value={settings.home_explore_button || ""} onChange={e => setSettings({...settings, home_explore_button: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400 pt-3 sm:pt-4 border-t border-white/10">Shop Page Title</label><input type="text" value={settings.shop_title || ""} onChange={e => setSettings({...settings, shop_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Shop Page Subtitle</label><textarea rows={2} value={settings.shop_subtitle || ""} onChange={e => setSettings({...settings, shop_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-indigo-500 text-sm" />
                 </div>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-                    <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
-                        <h3 className="text-lg sm:text-xl font-bold text-indigo-400 border-b border-white/10 pb-3 sm:pb-4">Home & Shop Pages</h3>
-                        <label className="block text-xs sm:text-sm text-gray-400">Hero Title</label><input type="text" value={settings.hero_title || ""} onChange={e => setSettings({...settings, hero_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Hero Subtitle</label><textarea rows={2} value={settings.hero_subtitle || ""} onChange={e => setSettings({...settings, hero_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-indigo-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Featured Products Title</label><input type="text" value={settings.home_featured_title || ""} onChange={e => setSettings({...settings, home_featured_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Explore Button Text</label><input type="text" value={settings.home_explore_button || ""} onChange={e => setSettings({...settings, home_explore_button: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400 pt-3 sm:pt-4 border-t border-white/10">Shop Page Title</label><input type="text" value={settings.shop_title || ""} onChange={e => setSettings({...settings, shop_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Shop Page Subtitle</label><textarea rows={2} value={settings.shop_subtitle || ""} onChange={e => setSettings({...settings, shop_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-indigo-500 text-sm" />
+                <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
+                    <h3 className="text-lg sm:text-xl font-bold text-purple-400 border-b border-white/10 pb-3 sm:pb-4">About Page Texts</h3>
+                    <input type="text" placeholder="Badge (e.g. OUR STORY)" value={settings.about_badge || ""} onChange={e => setSettings({...settings, about_badge: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                    <input type="text" placeholder="Title (e.g. About *NexusKit*)" value={settings.about_title || ""} onChange={e => setSettings({...settings, about_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                    <textarea rows={3} placeholder="Full Description..." value={settings.about_text || ""} onChange={e => setSettings({...settings, about_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-purple-500 text-sm" />
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                       <input type="text" placeholder="Stat 1 Value" value={settings.about_stat_1_val || ""} onChange={e => setSettings({...settings, about_stat_1_val: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
+                       <input type="text" placeholder="Stat 1 Text" value={settings.about_stat_1_text || ""} onChange={e => setSettings({...settings, about_stat_1_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
+                       <input type="text" placeholder="Stat 2 Value" value={settings.about_stat_2_val || ""} onChange={e => setSettings({...settings, about_stat_2_val: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
+                       <input type="text" placeholder="Stat 2 Text" value={settings.about_stat_2_text || ""} onChange={e => setSettings({...settings, about_stat_2_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
                     </div>
-                    
-                    <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
-                        <h3 className="text-lg sm:text-xl font-bold text-purple-400 border-b border-white/10 pb-3 sm:pb-4">About Page Texts</h3>
-                        <input type="text" placeholder="Badge (e.g. OUR STORY)" value={settings.about_badge || ""} onChange={e => setSettings({...settings, about_badge: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
-                        <input type="text" placeholder="Title (e.g. About *NexusKit*)" value={settings.about_title || ""} onChange={e => setSettings({...settings, about_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
-                        <textarea rows={3} placeholder="Full Description..." value={settings.about_text || ""} onChange={e => setSettings({...settings, about_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-purple-500 text-sm" />
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                           <input type="text" placeholder="Stat 1 Value" value={settings.about_stat_1_val || ""} onChange={e => setSettings({...settings, about_stat_1_val: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
-                           <input type="text" placeholder="Stat 1 Text" value={settings.about_stat_1_text || ""} onChange={e => setSettings({...settings, about_stat_1_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
-                           <input type="text" placeholder="Stat 2 Value" value={settings.about_stat_2_val || ""} onChange={e => setSettings({...settings, about_stat_2_val: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
-                           <input type="text" placeholder="Stat 2 Text" value={settings.about_stat_2_text || ""} onChange={e => setSettings({...settings, about_stat_2_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 text-xs sm:text-sm outline-none focus:border-purple-500" />
-                        </div>
-                        <input type="text" placeholder="Floating Box Title" value={settings.about_floating_title || ""} onChange={e => setSettings({...settings, about_floating_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
-                        <input type="text" placeholder="Button Text" value={settings.about_button_text || ""} onChange={e => setSettings({...settings, about_button_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
-                        <div><label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-bold uppercase tracking-wider">Change About Image</label><input type="file" onChange={e => setAboutImageFile(e.target.files?.[0] || null)} className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs sm:text-sm" /></div>
-                    </div>
+                    <input type="text" placeholder="Floating Box Title" value={settings.about_floating_title || ""} onChange={e => setSettings({...settings, about_floating_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                    <input type="text" placeholder="Button Text" value={settings.about_button_text || ""} onChange={e => setSettings({...settings, about_button_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                    <div><label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-bold uppercase tracking-wider">Change About Image</label><input type="file" onChange={e => setAboutImageFile(e.target.files?.[0] || null)} className="w-full p-2 bg-black/40 border border-white/10 rounded-xl text-xs sm:text-sm" /></div>
+                </div>
 
-                    <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
-                        <h3 className="text-lg sm:text-xl font-bold text-emerald-400 border-b border-white/10 pb-3 sm:pb-4">Contact Page Texts</h3>
-                        <label className="block text-xs sm:text-sm text-gray-400">Contact Title</label><input type="text" value={settings.contact_page_title || ""} onChange={e => setSettings({...settings, contact_page_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Contact Subtitle</label><textarea rows={2} value={settings.contact_page_subtitle || ""} onChange={e => setSettings({...settings, contact_page_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-emerald-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Status Text</label><textarea rows={2} value={settings.contact_status_text || ""} onChange={e => setSettings({...settings, contact_status_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-emerald-500 text-sm" />
-                    </div>
+                <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
+                    <h3 className="text-lg sm:text-xl font-bold text-emerald-400 border-b border-white/10 pb-3 sm:pb-4">Contact Page Texts</h3>
+                    <label className="block text-xs sm:text-sm text-gray-400">Contact Title</label><input type="text" value={settings.contact_page_title || ""} onChange={e => setSettings({...settings, contact_page_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-emerald-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Contact Subtitle</label><textarea rows={2} value={settings.contact_page_subtitle || ""} onChange={e => setSettings({...settings, contact_page_subtitle: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-emerald-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Status Text</label><textarea rows={2} value={settings.contact_status_text || ""} onChange={e => setSettings({...settings, contact_status_text: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-emerald-500 text-sm" />
+                </div>
 
-                    <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
-                        <h3 className="text-lg sm:text-xl font-bold text-orange-400 border-b border-white/10 pb-3 sm:pb-4">Cart & Checkout Pages</h3>
-                        <label className="block text-xs sm:text-sm text-gray-400">Cart Title</label><input type="text" value={settings.cart_title || ""} onChange={e => setSettings({...settings, cart_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Order Summary Title</label><input type="text" value={settings.cart_order_summary || ""} onChange={e => setSettings({...settings, cart_order_summary: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
-                        <label className="block text-xs sm:text-sm text-gray-400">Checkout Button Text</label><input type="text" value={settings.cart_checkout_button || ""} onChange={e => setSettings({...settings, cart_checkout_button: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
-                    </div>
+                <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 shadow-xl">
+                    <h3 className="text-lg sm:text-xl font-bold text-orange-400 border-b border-white/10 pb-3 sm:pb-4">Cart & Checkout Pages</h3>
+                    <label className="block text-xs sm:text-sm text-gray-400">Cart Title</label><input type="text" value={settings.cart_title || ""} onChange={e => setSettings({...settings, cart_title: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Order Summary Title</label><input type="text" value={settings.cart_order_summary || ""} onChange={e => setSettings({...settings, cart_order_summary: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
+                    <label className="block text-xs sm:text-sm text-gray-400">Checkout Button Text</label><input type="text" value={settings.cart_checkout_button || ""} onChange={e => setSettings({...settings, cart_checkout_button: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-orange-500 text-sm" />
+                </div>
 
-                    <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 col-span-1 lg:col-span-2 shadow-xl">
-                        <h3 className="text-lg sm:text-xl font-bold text-blue-400 border-b border-white/10 pb-3 sm:pb-4">General, Footer & Social Links</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-                            <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Instagram URL</label><input type="text" value={settings.instagram_url || ""} onChange={e => setSettings({...settings, instagram_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
-                            <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Telegram URL</label><input type="text" value={settings.telegram_url || ""} onChange={e => setSettings({...settings, telegram_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
-                            <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Facebook URL</label><input type="text" value={settings.facebook_url || ""} onChange={e => setSettings({...settings, facebook_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-2 sm:pt-4">
-                           <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Contact Email</label><input type="email" value={settings.contact_email || ""} onChange={e => setSettings({...settings, contact_email: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
-                           <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Contact Phone</label><input type="text" value={settings.contact_phone || ""} onChange={e => setSettings({...settings, contact_phone: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
-                           <div className="col-span-1 md:col-span-2"><label className="block text-xs sm:text-sm text-gray-400 mb-1">Footer Text</label><textarea rows={2} value={settings.footer_description || ""} onChange={e => setSettings({...settings, footer_description: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-blue-500 text-sm" /></div>
-                        </div>
+                <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/10 bg-white/5 space-y-4 col-span-1 lg:col-span-2 shadow-xl">
+                    <h3 className="text-lg sm:text-xl font-bold text-blue-400 border-b border-white/10 pb-3 sm:pb-4">General, Footer & Social Links</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                        <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Instagram URL</label><input type="text" value={settings.instagram_url || ""} onChange={e => setSettings({...settings, instagram_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
+                        <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Telegram URL</label><input type="text" value={settings.telegram_url || ""} onChange={e => setSettings({...settings, telegram_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
+                        <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Facebook URL</label><input type="text" value={settings.facebook_url || ""} onChange={e => setSettings({...settings, facebook_url: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-2 sm:pt-4">
+                       <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Contact Email</label><input type="email" value={settings.contact_email || ""} onChange={e => setSettings({...settings, contact_email: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
+                       <div><label className="block text-xs sm:text-sm text-gray-400 mb-1">Contact Phone</label><input type="text" value={settings.contact_phone || ""} onChange={e => setSettings({...settings, contact_phone: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-blue-500 text-sm" /></div>
+                       <div className="col-span-1 md:col-span-2"><label className="block text-xs sm:text-sm text-gray-400 mb-1">Footer Text</label><textarea rows={2} value={settings.footer_description || ""} onChange={e => setSettings({...settings, footer_description: e.target.value})} className="w-full p-3 rounded-xl bg-black/40 border border-white/10 resize-none outline-none focus:border-blue-500 text-sm" /></div>
                     </div>
                 </div>
-            </form>
-          </div>
+            </div>
+          </form>
         )}
       </main>
 
@@ -744,8 +800,8 @@ export default function AdminDashboard() {
 
               <div className="mb-4 sm:mb-6 bg-emerald-500/10 border border-emerald-500/20 p-4 sm:p-5 rounded-2xl">
                  <label className="flex text-xs sm:text-sm text-emerald-400 mb-2 font-bold items-center gap-2">
-   <span>🔐</span> Secure Credentials / Admin Note
-</label>
+                   <span>🔐</span> Secure Credentials / Admin Note
+                 </label>
                  <textarea 
                     rows={4} 
                     placeholder="Enter Email / Password here... (Visible to customer)" 
@@ -759,9 +815,10 @@ export default function AdminDashboard() {
               <div className="mb-6 sm:mb-8">
                   <label className="block text-xs sm:text-sm text-gray-400 mb-2 font-bold uppercase tracking-wider">Order Status</label>
                   <select value={orderStatus} onChange={e => setOrderStatus(e.target.value)} className="w-full p-3 sm:p-4 rounded-xl bg-black/50 border border-white/10 outline-none focus:border-indigo-500 font-bold cursor-pointer text-sm sm:text-base appearance-none">
-                    <option value="pending">🟡 Pending Verification</option>
-                    <option value="completed">🟢 Approve & Send Credentials</option>
-                    <option value="cancelled">🔴 Cancelled</option>
+                     <option value="pending">🟡 Pending Verification</option>
+                     <option value="awaiting_payment">🔵 Setup Done (Wait for Slip)</option>
+                     <option value="completed">🟢 Completed & Delivered</option>
+                     <option value="cancelled">🔴 Cancelled</option>
                   </select>
               </div>
 
@@ -769,25 +826,41 @@ export default function AdminDashboard() {
                 <button onClick={() => setSelectedOrder(null)} className="text-gray-400 font-bold hover:text-white transition-colors py-2 sm:py-0 order-2 sm:order-1 text-sm sm:text-base">Cancel</button>
                 <button onClick={async () => {
                     const updates: any = { status: orderStatus, admin_note: adminNote };
+                    
                     if (orderStatus === "completed" && selectedOrder.status !== "completed") {
-                        let maxDays = 0;
-                        selectedOrder.items.forEach((item: any) => { if (item.subscription_days && item.subscription_days > maxDays) maxDays = item.subscription_days; });
-                        if (maxDays > 0) {
-                            updates.start_date = new Date().toISOString();
-                            let endDate = new Date(); endDate.setDate(endDate.getDate() + maxDays);
-                            updates.end_date = endDate.toISOString();
-                        }
+                        const now = new Date();
+                        updates.start_date = now.toISOString(); // For backward compatibility
+                        
+                        // 🌟 ပစ္စည်းတစ်ခုချင်းစီအတွက် သက်တမ်းတွက်ချက်ပြီး သိမ်းပါမည် 🌟
+                        updates.items = selectedOrder.items.map((item: any) => {
+                            if (item.subscription_days && item.subscription_days > 0) {
+                                let endDate = new Date(now);
+                                endDate.setDate(endDate.getDate() + Number(item.subscription_days));
+                                return { ...item, start_date: now.toISOString(), end_date: endDate.toISOString() };
+                            }
+                            return item; // Subscription မဟုတ်ရင် ရိုးရိုးပဲထားမယ်
+                        });
                     }
+                    
                     await supabase.from("orders").update(updates).eq("id", selectedOrder.id);
                     setSelectedOrder(null); fetchData(false); alert("Updated successfully!");
                 }} className="bg-emerald-600 hover:bg-emerald-500 text-white p-3 sm:px-8 sm:py-3 rounded-xl font-bold shadow-lg transition-all order-1 sm:order-2 text-sm sm:text-base active:scale-95">
                   Approve Order
                 </button>
               </div>
+              
           </div>
         </div>
       )}
-
+      
+      {/* 🌟 Real-time Toast Notification UI 🌟 */}
+      {notification && (
+        <div className="fixed top-5 right-5 z-[1000] bg-indigo-600 border border-indigo-400 p-5 rounded-2xl shadow-2xl animate-in slide-in-from-top-5">
+           <h4 className="font-bold text-white text-lg">{notification.title}</h4>
+           <p className="text-sm text-indigo-100 mt-1">{notification.desc}</p>
+           <button onClick={() => setNotification(null)} className="absolute top-2 right-3 text-white/50 hover:text-white">✕</button>
+        </div>
+      )}
     </div>
   );
 }
