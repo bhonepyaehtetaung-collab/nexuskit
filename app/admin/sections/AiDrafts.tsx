@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n";
 import { formatPrice } from "@/lib/format";
 import { BagIcon, BriefcaseIcon, CloseIcon, NewsIcon, PlusIcon, UploadIcon } from "../../components/icons";
 import type { AdminData, Role } from "../data";
-import { Empty, PageHeader, useAdminUi } from "../ui";
+import { bustStoreCache, Empty, PageHeader, useAdminUi } from "../ui";
 
 type Mode = "products" | "job" | "news";
 type Draft = { id: string; kind: "product" | "bundle" | "post" | "job"; status: string; data: any; cost: number | null; note: string | null; sources: any[]; origin: string; decided_by: string | null; decided_at: string | null; created_at: string };
@@ -90,6 +90,7 @@ export default function AiDrafts({ data, role, onChange }: { data: AdminData; ro
       return toast(msg, "error");
     }
     toast(approve ? L("✓ Website ပေါ် တင်ပြီးပါပြီ", "✓ Published") : L("ပယ်လိုက်ပါပြီ", "Rejected"), approve ? "ok" : "info");
+    if (approve) bustStoreCache();
     await load();
     onChange();
     if (approve && d.kind === "product") data.reload.products();

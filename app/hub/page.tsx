@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/lib/server/public-db";
 import { getT } from "@/lib/server-lang";
 import type { TKey } from "@/lib/dict";
 import PostCover from "../components/PostCover";
@@ -14,7 +14,7 @@ export default async function HubPage({ searchParams }: { searchParams: Promise<
   const active = TAGS.includes(tag as any) ? tag : null;
   const { lang, t } = await getT();
 
-  const supabase = createClient();
+  const supabase = createPublicClient();
   let query = supabase.from("posts").select("id, slug, title, excerpt, cover_url, tag, created_at").eq("published", true).order("created_at", { ascending: false }).limit(60);
   if (active) query = query.eq("tag", active);
   const { data } = await query;

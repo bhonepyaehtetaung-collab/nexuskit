@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/lib/server/public-db";
 import { getT } from "@/lib/server-lang";
 import type { TKey } from "@/lib/dict";
 import PostCover from "@/app/components/PostCover";
@@ -12,7 +12,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 async function getPost(slug: string) {
   if (!/^[a-z0-9-]{3,80}$/.test(slug)) return null;
-  const { data } = await createClient().from("posts").select("*").eq("slug", slug).eq("published", true).maybeSingle();
+  const { data } = await createPublicClient().from("posts").select("*").eq("slug", slug).eq("published", true).maybeSingle();
   return data;
 }
 
@@ -57,7 +57,7 @@ export default async function PostPage({ params }: Props) {
 
   const ids: string[] = Array.isArray(post.product_ids) ? post.product_ids.slice(0, 12) : [];
   const { data: products } = ids.length
-    ? await createClient().from("products").select("*").in("id", ids)
+    ? await createPublicClient().from("products").select("*").in("id", ids)
     : { data: [] as any[] };
 
   return (

@@ -1,12 +1,12 @@
 import { Suspense } from "react";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/lib/server/public-db";
 import { buildCategories } from "@/lib/categories";
 import { withBundlePrices } from "@/lib/bundles";
 import HomeView from "./HomeView";
 
 /** The store: banner, toolkits, categories and every product on one page. */
 export default async function HomePage() {
-  const supabase = createClient();
+  const supabase = createPublicClient();
   const [productsRes, categoriesRes, methodsRes, bundlesRes] = await Promise.all([
     supabase.from("products").select("*").order("created_at", { ascending: false }),
     supabase.from("product_categories").select("*").order("created_at", { ascending: true }),

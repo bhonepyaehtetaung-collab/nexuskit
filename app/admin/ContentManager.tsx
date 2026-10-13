@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { formatPrice } from "@/lib/format";
-import { useAdminUi } from "./ui";
+import { bustStoreCache, useAdminUi } from "./ui";
 
 /* ------------------------------------------------------------------ */
 /* Shared helpers                                                      */
@@ -141,7 +141,7 @@ function HubManager({ products }: { products: any[] }) {
         if (job?.status === "error") throw new Error(job.error || "AI error");
         await new Promise((r) => setTimeout(r, 3000));
       }
-      load();
+      bustStoreCache(); load();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -163,7 +163,7 @@ function HubManager({ products }: { products: any[] }) {
     setSaving(false);
     if (error) return alert(error.message.includes("duplicate") ? "That link name is already used." : error.message);
     setEdit(null);
-    load();
+    bustStoreCache(); load();
   };
 
   if (edit) {
@@ -238,7 +238,7 @@ function HubManager({ products }: { products: any[] }) {
               {drawing === p.id ? "🎨 Drawing… (~30s)" : p.cover_url ? "🎨 New AI cover" : "🎨 AI cover"}
             </button>
             <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setEdit({ ...emptyPost, ...p, excerpt: p.excerpt || "", cover_url: p.cover_url || "", body: p.body || "", product_ids: p.product_ids || [] })}>Edit</button>
-            <button type="button" className="btn-quiet px-3 py-1.5 text-xs text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("posts").delete().eq("id", p.id); load(); } }}>Delete</button>
+            <button type="button" className="btn-quiet px-3 py-1.5 text-xs text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("posts").delete().eq("id", p.id); bustStoreCache(); load(); } }}>Delete</button>
           </li>
         ))}
       </ul>
@@ -287,7 +287,7 @@ function BundleManager({ products }: { products: any[] }) {
     setSaving(false);
     if (error) return alert(error.message);
     setEdit(null);
-    load();
+    bustStoreCache(); load();
   };
 
   if (edit) {
@@ -348,7 +348,7 @@ function BundleManager({ products }: { products: any[] }) {
               </div>
               <span className={`badge ${b.active ? "bg-mint/15 text-mint" : "bg-raised text-muted"}`}>{b.active ? "Live" : "Hidden"}</span>
               <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setEdit({ ...emptyBundle, ...b, description: b.description || "", image: b.image || "", discount_percent: String(b.discount_percent), product_ids: (b.product_ids || []).map(String) })}>Edit</button>
-              <button type="button" className="btn-quiet px-3 py-1.5 text-xs text-danger" onClick={async () => { if (await ask("Delete this toolkit?")) { await supabase.from("bundles").delete().eq("id", b.id); load(); } }}>Delete</button>
+              <button type="button" className="btn-quiet px-3 py-1.5 text-xs text-danger" onClick={async () => { if (await ask("Delete this toolkit?")) { await supabase.from("bundles").delete().eq("id", b.id); bustStoreCache(); load(); } }}>Delete</button>
             </li>
           );
         })}
@@ -382,7 +382,7 @@ function JobModeration() {
     if (next === "approved") patch.expires_at = new Date(Date.now() + 30 * 86_400_000).toISOString();
     const { error } = await supabase.from("jobs").update(patch).eq("id", id);
     if (error) alert(error.message);
-    load();
+    bustStoreCache(); load();
   };
 
   if (missing) return <SetupNeeded />;
@@ -413,7 +413,7 @@ function JobModeration() {
               {j.status !== "approved" && <button type="button" className="btn bg-mint px-4 py-2 text-ink hover:bg-mint/90" onClick={() => setJobStatus(j.id, "approved")}>Approve (30 days)</button>}
               {j.status === "pending" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "rejected")}>Reject</button>}
               {j.status === "approved" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "closed")}>Close</button>}
-              <button type="button" className="btn-quiet px-4 py-2 text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("jobs").delete().eq("id", j.id); load(); } }}>Delete</button>
+              <button type="button" className="btn-quiet px-4 py-2 text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("jobs").delete().eq("id", j.id); bustStoreCache(); load(); } }}>Delete</button>
             </div>
           </li>
         ))}

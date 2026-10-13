@@ -194,3 +194,12 @@ export function downloadCsv(rows: any[], filename: string) {
   a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
+
+/** Tell the server to refresh its cached copy of the store (after an admin edit). */
+let bustTimer: ReturnType<typeof setTimeout> | undefined;
+export function bustStoreCache() {
+  clearTimeout(bustTimer);
+  bustTimer = setTimeout(() => {
+    fetch("/api/revalidate", { method: "POST" }).catch(() => {});
+  }, 800);
+}

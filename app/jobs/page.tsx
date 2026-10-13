@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
+import { createPublicClient } from "@/lib/server/public-db";
 import { getT } from "@/lib/server-lang";
 import type { TKey } from "@/lib/dict";
 import { PlusIcon, ShieldIcon } from "../components/icons";
@@ -22,12 +22,12 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const active = KINDS.includes(kind as any) ? kind : null;
   const { lang, t } = await getT();
 
-  const supabase = createClient();
+  const supabase = createPublicClient(120);
   let query = supabase
     .from("jobs")
     .select("id, kind, title, description, category, budget, contact, created_at")
     .eq("status", "approved")
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", new Date(Math.floor(Date.now() / 600_000) * 600_000).toISOString()) // 10-min steps so the result can be cached
     .order("created_at", { ascending: false })
     .limit(100);
   if (active) query = query.eq("kind", active);

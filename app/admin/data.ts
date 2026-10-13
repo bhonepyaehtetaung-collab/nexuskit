@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { daysUntil } from "@/lib/format";
+import { bustStoreCache } from "./ui";
 
 export type Role = "super_admin" | "manager" | "editor";
 
@@ -19,6 +20,7 @@ export function useAdminData(onRealtime?: (kind: "insert" | "slip", order: any) 
   const [team, setTeam] = useState<any[]>([]);
   const [pendingJobs, setPendingJobs] = useState(0);
   const [aiPending, setAiPending] = useState(0);
+  const loadedRef = useRef(false);
   const realtimeRef = useRef(onRealtime);
   realtimeRef.current = onRealtime;
 
@@ -33,12 +35,22 @@ export function useAdminData(onRealtime?: (kind: "insert" | "slip", order: any) 
   const reload = useMemo(
     () => ({
       orders: async () => setOrders(await list("orders")),
-      products: async () => setProducts(await list("products")),
+      products: async () => {
+        if (loadedRef.current) bustStoreCache();
+        setProducts(await list("products"));
+      },
       promos: async () => setPromos(await list("promo_codes")),
-      methods: async () => setMethods(await list("payment_methods")),
-      categories: async () => setCategories((await list("product_categories")).reverse()),
+      methods: async () => {
+        if (loadedRef.current) bustStoreCache();
+        setMethods(await list("payment_methods"));
+      },
+      categories: async () => {
+        if (loadedRef.current) bustStoreCache();
+        setCategories((await list("product_categories")).reverse());
+      },
       fields: async () => setFields((await list("customer_info_fields")).reverse()),
       settings: async () => {
+        if (loadedRef.current) bustStoreCache();
         const { data } = await supabase.from("site_settings").select("*").eq("id", 1).maybeSingle();
         setSettings(data || {});
       },
@@ -55,7 +67,11 @@ export function useAdminData(onRealtime?: (kind: "insert" | "slip", order: any) 
     [list, supabase],
   );
 
-  const reloadAll = useCallback(() => Promise.allSettled(Object.values(reload).map((fn) => fn())), [reload]);
+  const reloadAll = useCallback(async () => {
+    const result = await Promise.allSettled(Object.values(reload).map((fn) => fn()));
+    loadedRef.current = true;
+    return result;
+  }, [reload]);
 
   useEffect(() => {
     const channel = supabase

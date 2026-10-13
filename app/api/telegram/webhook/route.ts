@@ -1,4 +1,6 @@
 import { NextResponse, after } from "next/server";
+import { revalidateTag } from "next/cache";
+import { CATALOG_TAG } from "@/lib/server/public-db";
 import { timingSafeEqual } from "crypto";
 import { aiConfigured } from "@/lib/server/ai";
 import { friendlyAiError, tg, type DraftKind } from "@/lib/server/drafts";
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
       text = `ဒီ draft က ${(data as any).status === "approved" ? "တင်ပြီးသား" : "ပယ်ပြီးသား"} ပါ`;
     } else {
       text = approve ? "✅ Website ပေါ် တင်ပြီးပါပြီ" : "❌ မတင်ပါ — ပယ်လိုက်ပါပြီ";
+      if (approve) revalidateTag(CATALOG_TAG, { expire: 0 });
     }
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text, show_alert: !!error });
     if (!error && cb.message?.message_id) {

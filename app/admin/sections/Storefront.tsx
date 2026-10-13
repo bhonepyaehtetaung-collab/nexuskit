@@ -6,7 +6,7 @@ import { EDITABLE_TEXT } from "@/lib/ui-text";
 import { categoryHue, categoryKey } from "@/lib/format";
 import { ChevronDownIcon, CloseIcon, UploadIcon } from "../../components/icons";
 import type { AdminData } from "../data";
-import { PageHeader, Toggle, useAdminUi } from "../ui";
+import { bustStoreCache, PageHeader, Toggle, useAdminUi } from "../ui";
 import { upload } from "./Products";
 
 type Overrides = Record<string, { my?: string; en?: string }>;
@@ -47,6 +47,7 @@ function TextEditor({ data }: { data: AdminData }) {
       return toast(/ui_text/.test(error.message) ? L("supabase/storefront.sql ကို အရင် run ပါ", "Run supabase/storefront.sql first") : error.message, "error");
     }
     data.setSettings((prev: any) => ({ ...prev, ui_text }));
+    bustStoreCache();
     toast(L("✓ သိမ်းပြီးပါပြီ — ဆိုင်ကို refresh လုပ်ရင် မြင်ရပါမယ်", "✓ Saved — refresh the store to see it"));
   };
 
