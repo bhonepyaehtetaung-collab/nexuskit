@@ -3,7 +3,7 @@ import { Bricolage_Grotesque, Figtree, Noto_Sans_Myanmar } from "next/font/googl
 import "./globals.css";
 import { CartProvider } from "./context/cartContext";
 import { LangProvider } from "@/lib/i18n";
-import { getLang } from "@/lib/server-lang";
+import { getLang, getTextOverrides } from "@/lib/server-lang";
 import ConditionalUI from "./components/ConditionalUI";
 
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", display: "swap" });
@@ -35,11 +35,11 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // Burmese by default; the language switch stores the choice in a cookie.
-  const lang = await getLang();
+  const [lang, overrides] = await Promise.all([getLang(), getTextOverrides()]);
   return (
     <html lang={lang} className={`${display.variable} ${body.variable} ${myanmar.variable}`}>
       <body className="flex min-h-screen flex-col bg-ink text-text antialiased">
-        <LangProvider initialLang={lang}>
+        <LangProvider initialLang={lang} overrides={overrides}>
           <CartProvider>
             <ConditionalUI>{children}</ConditionalUI>
           </CartProvider>

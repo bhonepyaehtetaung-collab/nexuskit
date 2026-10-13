@@ -288,3 +288,49 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
   }
   return [];
 }
+
+/* ------------------------------------------------------------------ */
+/* Cover pictures for Hub posts (original SVG illustrations)           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Only plain vector shapes are allowed: anything that could run code or load
+ * outside content makes the whole picture be thrown away.
+ */
+export function sanitizeSvg(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const start = raw.indexOf("<svg");
+  const end = raw.lastIndexOf("</svg>");
+  if (start < 0 || end < start) return null;
+  let svg = raw.slice(start, end + 6).trim();
+  if (svg.length > 150_000) return null;
+  const banned = [
+    /<\s*script/i, /<\s*foreignObject/i, /<\s*iframe/i, /<\s*image/i, /<\s*use\b/i, /<\s*a\b/i, /<\s*style/i,
+    /<!\s*(DOCTYPE|ENTITY)/i, /javascript:/i, /\son[a-z]+\s*=/i, /(xlink:)?href\s*=\s*["'](?!#)/i,
+    /url\(\s*["']?(?!#)/i, /@import/i, /data:/i,
+  ];
+  if (banned.some((re) => re.test(svg))) return null;
+  if (!/xmlns\s*=\s*["']http:\/\/www\.w3\.org\/2000\/svg["']/.test(svg)) svg = svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+  return svg;
+}
+
+export async function draftCoverSvg(post: { title: string; excerpt?: string; tag?: string }): Promise<string> {
+  const system = [
+    "You are an illustrator making cover art for NexusKit Hub, a Myanmar site about game top-ups, premium apps and earning money online.",
+    "Return ONE self-contained SVG: viewBox=\"0 0 1200 630\", width=\"1200\" height=\"630\", xmlns=\"http://www.w3.org/2000/svg\".",
+    "Style: modern flat / soft-3D editorial illustration with rich gradients, depth (layered shapes, soft shadows via feGaussianBlur), a clear focal object in the middle-right and calm space on the left. Palette based on deep indigo #1E1B5E, violet #6E5EF5, warm yellow #F5B942 and mint #34D399, adjusted to the topic.",
+    "Show the topic with ORIGINAL symbolic objects (e.g. a game controller, smartphone, chat bubbles, sparkles, coins, a calendar, a laptop, a trophy, snowflakes for winter) — never copy a real logo, brand mark, mascot, game character or app icon, and never draw recognisable trademarks.",
+    "No text, letters or numbers anywhere in the picture.",
+    "Allowed elements only: svg, g, defs, linearGradient, radialGradient, stop, filter, feGaussianBlur, feOffset, feMerge, feMergeNode, feBlend, feColorMatrix, clipPath, mask, path, rect, circle, ellipse, line, polyline, polygon. References only as url(#id). No <text>, <image>, <use>, <style>, scripts, links or external URLs.",
+    "Keep it under 14,000 characters.",
+  ].join("\n");
+  const out = await structured<{ svg: string }>(
+    system,
+    [{ type: "text", text: `Post type: ${post.tag || "news"}\nTitle: ${post.title.slice(0, 200)}\nSummary: ${(post.excerpt || "").slice(0, 400)}` }],
+    { type: "object", properties: { svg: { type: "string" } }, required: ["svg"], additionalProperties: false },
+    9000,
+  );
+  const svg = sanitizeSvg(out?.svg);
+  if (!svg) throw new Error("The cover picture could not be used — try again");
+  return svg;
+}

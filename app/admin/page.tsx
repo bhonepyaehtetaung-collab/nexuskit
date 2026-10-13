@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { LangToggle, useT, type TKey } from "@/lib/i18n";
 import { Logo } from "../components/Navbar";
 import {
-  BagIcon, BriefcaseIcon, CogIcon, GridIcon, HomeIcon, LayersIcon, LogoutIcon, MenuIcon, NewsIcon, ShieldIcon, SparkIcon, TagIcon, UserIcon,
+  BagIcon, BriefcaseIcon, BrushIcon, CogIcon, GridIcon, HomeIcon, LayersIcon, LogoutIcon, MenuIcon, NewsIcon, ShieldIcon, SparkIcon, TagIcon, UserIcon,
 } from "../components/icons";
 import ContentManager from "./ContentManager";
 import { orderStage, useAdminData, type Role } from "./data";
@@ -15,10 +15,11 @@ import Orders from "./sections/Orders";
 import Products from "./sections/Products";
 import Settings from "./sections/Settings";
 import AiDrafts from "./sections/AiDrafts";
+import Storefront from "./sections/Storefront";
 import Today from "./sections/Today";
 import { AdminUiProvider, Sheet, useAdminUi } from "./ui";
 
-type Tab = "today" | "ai" | "orders" | "products" | "customers" | "promos" | "hub" | "bundles" | "jobs" | "team" | "settings";
+type Tab = "today" | "ai" | "orders" | "products" | "customers" | "promos" | "hub" | "bundles" | "jobs" | "team" | "storefront" | "settings";
 
 const TABS: { id: Tab; label: TKey; Icon: ComponentType<{ size?: number }>; min: Role }[] = [
   { id: "today", label: "ad.today", Icon: HomeIcon, min: "manager" },
@@ -30,6 +31,7 @@ const TABS: { id: Tab; label: TKey; Icon: ComponentType<{ size?: number }>; min:
   { id: "bundles", label: "ad.bundles", Icon: LayersIcon, min: "editor" },
   { id: "hub", label: "ad.hub", Icon: NewsIcon, min: "editor" },
   { id: "jobs", label: "ad.jobs", Icon: BriefcaseIcon, min: "editor" },
+  { id: "storefront", label: "ad.storefront", Icon: BrushIcon, min: "super_admin" },
   { id: "team", label: "ad.team", Icon: ShieldIcon, min: "super_admin" },
   { id: "settings", label: "ad.settings", Icon: CogIcon, min: "super_admin" },
 ];
@@ -195,6 +197,7 @@ function AdminShell() {
             <ContentManager section={tab} products={data.products} />
           )}
           {tab === "team" && <Team data={data} me={me.email} />}
+          {tab === "storefront" && <Storefront data={data} />}
           {tab === "settings" && <Settings data={data} />}
         </div>
       </main>

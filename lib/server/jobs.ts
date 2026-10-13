@@ -4,9 +4,10 @@
 import { timingSafeEqual } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AiImage } from "./ai";
-import { createDrafts, friendlyAiError, sendDraftsToTelegram, telegramImage, tg, type DraftKind, type Origin } from "./drafts";
+import { createDrafts, friendlyAiError, makeCover, sendDraftsToTelegram, telegramImage, tg, type DraftKind, type Origin } from "./drafts";
 
-export type JobInput = { text?: string; topic?: string; images?: AiImage[]; notify?: boolean; tg_file_id?: string; tg_wait_id?: number };
+export type JobKind = DraftKind | "cover";
+export type JobInput = { text?: string; topic?: string; images?: AiImage[]; notify?: boolean; tg_file_id?: string; tg_wait_id?: number; post_id?: string };
 
 const JOB_HEADER = "x-nexuskit-job";
 const jobSecret = () => process.env.TELEGRAM_WEBHOOK_SECRET || "";
@@ -19,7 +20,7 @@ export function isJobRequest(request: Request): boolean {
   return !!secret && a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function createJob(db: SupabaseClient, kind: DraftKind, origin: Origin, input: JobInput, by?: string): Promise<string> {
+export async function createJob(db: SupabaseClient, kind: JobKind, origin: Origin, input: JobInput, by?: string): Promise<string> {
   const { data, error } = await db.from("ai_jobs").insert({ kind, origin, input, created_by: by || null }).select("id").single();
   if (error || !data) throw new Error(error?.message || "Could not create AI job");
   return data.id as string;
@@ -49,6 +50,16 @@ export async function runJob(db: SupabaseClient, id: string): Promise<void> {
   const input: JobInput = job.input || {};
   const owner = process.env.TELEGRAM_CHAT_ID;
   try {
+    if (job.kind === "cover") {
+      // Draw a cover for an existing Hub post and attach it.
+      const { data: post } = await db.from("posts").select("id, title, excerpt, tag").eq("id", input.post_id || "").maybeSingle();
+      if (!post) throw new Error("Post not found");
+      const url = await makeCover(db, post);
+      const { error } = await db.from("posts").update({ cover_url: url }).eq("id", post.id);
+      if (error) throw new Error(error.message);
+      await db.from("ai_jobs").update({ status: "done", draft_count: 1, finished_at: new Date().toISOString() }).eq("id", id);
+      return;
+    }
     const images: AiImage[] = Array.isArray(input.images) ? input.images : [];
     if (input.tg_file_id) {
       const img = await telegramImage(input.tg_file_id);

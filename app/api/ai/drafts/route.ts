@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isSameOrigin, rateLimit } from "@/lib/server/guard";
 import { aiConfigured, type AiImage } from "@/lib/server/ai";
-import { friendlyAiError, type DraftKind } from "@/lib/server/drafts";
-import { createJob, queueJob, runJob } from "@/lib/server/jobs";
+import { friendlyAiError } from "@/lib/server/drafts";
+import { createJob, queueJob, runJob, type JobKind } from "@/lib/server/jobs";
 import { createServiceClient } from "@/lib/server/supabase-admin";
 
 export const maxDuration = 120;
@@ -20,7 +20,7 @@ function parseImage(v: unknown): AiImage | null {
 
 /**
  * POST /api/ai/drafts — staff only.
- * Body: { kind: "products" | "job" | "news", text?, topic?, images?: dataURL[] }
+ * Body: { kind: "products" | "job" | "news" | "cover", text?, topic?, images?: dataURL[], post_id? }
  * Starts an AI job; the browser polls ai_jobs for the result.
  * The AI writes drafts; nothing is published until someone approves it.
  */
@@ -43,17 +43,19 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-  const kind = body?.kind as DraftKind;
-  if (!["products", "job", "news"].includes(kind)) return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
+  const kind = body?.kind as JobKind;
+  if (!["products", "job", "news", "cover"].includes(kind)) return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
   const text = typeof body?.text === "string" ? body.text.slice(0, 12000) : "";
   const topic = typeof body?.topic === "string" ? body.topic.slice(0, 200) : "";
+  const postId = typeof body?.post_id === "string" && /^[0-9a-f-]{36}$/.test(body.post_id) ? body.post_id : undefined;
   const images = (Array.isArray(body?.images) ? body.images : []).slice(0, 4).map(parseImage).filter(Boolean) as AiImage[];
-  if (kind !== "news" && !text.trim() && images.length === 0) {
+  if (kind === "cover" && !postId) return NextResponse.json({ error: "Invalid post" }, { status: 400 });
+  if ((kind === "products" || kind === "job") && !text.trim() && images.length === 0) {
     return NextResponse.json({ error: "စာ ဒါမှမဟုတ် screenshot ထည့်ပါ။" }, { status: 400 });
   }
 
   try {
-    const jobId = await createJob(supabase as any, kind, "dashboard", { text, topic, images, notify: body?.notify !== false }, auth.user.email || undefined);
+    const jobId = await createJob(supabase as any, kind, "dashboard", { text, topic, images, notify: body?.notify !== false, post_id: postId }, auth.user.email || undefined);
     // On Netlify: background function (no 10 s limit). Locally: run now.
     const queued = await queueJob(new URL(request.url).origin, jobId);
     if (!queued) await runJob(createServiceClient() ?? (supabase as any), jobId);

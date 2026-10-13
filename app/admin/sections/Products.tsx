@@ -12,7 +12,7 @@ type Form = { id?: string; name: string; price: string; product_type: string; su
 
 const blank = (category: string): Form => ({ name: "", price: "", product_type: category, subscription_days: "0", required_fields: [], description: "", image: "" });
 
-async function upload(data: AdminData, file: File) {
+export async function upload(data: AdminData, file: File) {
   if (!/^image\/(png|jpe?g|webp|gif)$/.test(file.type)) throw new Error("PNG / JPG / WEBP / GIF");
   if (file.size > 5 * 1024 * 1024) throw new Error("< 5 MB");
   const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";

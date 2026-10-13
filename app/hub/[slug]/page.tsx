@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/utils/supabase/server";
-import { translate, type TKey } from "@/lib/dict";
-import { getLang } from "@/lib/server-lang";
+import { getT } from "@/lib/server-lang";
+import type { TKey } from "@/lib/dict";
 import PostCover from "@/app/components/PostCover";
 import ProductCard from "@/app/components/ProductCard";
 import { ArrowLeftIcon } from "@/app/components/icons";
@@ -53,8 +53,7 @@ function Body({ text }: { text: string }) {
 export default async function PostPage({ params }: Props) {
   const post = await getPost((await params).slug);
   if (!post) notFound();
-  const lang = await getLang();
-  const t = (k: TKey) => translate(lang, k);
+  const { lang, t } = await getT();
 
   const ids: string[] = Array.isArray(post.product_ids) ? post.product_ids.slice(0, 12) : [];
   const { data: products } = ids.length

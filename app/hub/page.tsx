@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
-import { translate, type TKey } from "@/lib/dict";
-import { getLang } from "@/lib/server-lang";
+import { getT } from "@/lib/server-lang";
+import type { TKey } from "@/lib/dict";
 import PostCover from "../components/PostCover";
 
 export const metadata = { title: "Hub" };
@@ -12,8 +12,7 @@ const TAG_TONE: Record<string, string> = { news: "bg-info/15 text-info", guide: 
 export default async function HubPage({ searchParams }: { searchParams: Promise<{ tag?: string }> }) {
   const { tag } = await searchParams;
   const active = TAGS.includes(tag as any) ? tag : null;
-  const lang = await getLang();
-  const t = (k: TKey) => translate(lang, k);
+  const { lang, t } = await getT();
 
   const supabase = createClient();
   let query = supabase.from("posts").select("id, slug, title, excerpt, cover_url, tag, created_at").eq("published", true).order("created_at", { ascending: false }).limit(60);

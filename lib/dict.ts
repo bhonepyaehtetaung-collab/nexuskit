@@ -200,9 +200,9 @@ export const dict = {
   "contact.statusText": { my: "အမြန်ဆုံး ဆက်သွယ်နည်းက Telegram ပါ။ Order နံပါတ်ရှိရင် တွဲပို့ပေးပါ။", en: "The fastest way to reach us is Telegram. Include your order number if you have one." },
 
   // Navigation (new)
-  "nav.store": { my: "ဆိုင်", en: "Store" },
-  "nav.hub": { my: "Hub", en: "Hub" },
-  "nav.jobs": { my: "Jobs", en: "Jobs" },
+  "nav.store": { my: "ဈေးကွက်", en: "Store" },
+  "nav.hub": { my: "သတင်းဝိုင်း", en: "Hub" },
+  "nav.jobs": { my: "Job Board", en: "Job Board" },
 
   // Store (merged home + shop)
   "store.all": { my: "အားလုံး", en: "All" },
@@ -227,7 +227,7 @@ export const dict = {
   "bundle.kind": { my: "Toolkit", en: "Toolkit" },
 
   // Hub
-  "hub.title": { my: "Hub", en: "Hub" },
+  "hub.title": { my: "သတင်းဝိုင်း", en: "Hub" },
   "hub.sub": { my: "Game သတင်း၊ ဝင်ငွေရှာနည်း လမ်းညွှန်နဲ့ promo အသစ်များ", en: "Game news, money-making guides and the latest promos" },
   "hub.all": { my: "အားလုံး", en: "All" },
   "hub.news": { my: "သတင်း", en: "News" },
@@ -235,12 +235,12 @@ export const dict = {
   "hub.promo": { my: "Promo", en: "Promos" },
   "hub.empty": { my: "Post မရှိသေးပါ။ မကြာခင် ပြန်လာကြည့်ပါ။", en: "No posts yet. Check back soon." },
   "hub.read": { my: "ဖတ်ရန်", en: "Read" },
-  "hub.back": { my: "Hub သို့", en: "Back to Hub" },
+  "hub.back": { my: "သတင်းဝိုင်းသို့", en: "Back to Hub" },
   "hub.related": { my: "ဒီ post မှာ ပါတဲ့ product များ", en: "Products in this post" },
   "hub.notFound": { my: "ဒီ post မရှိပါ", en: "This post doesn’t exist" },
 
   // Jobs
-  "jobs.title": { my: "Jobs", en: "Jobs" },
+  "jobs.title": { my: "Job Board", en: "Job Board" },
   "jobs.sub": { my: "Freelancer တွေနဲ့ လုပ်ငန်းရှင်တွေ ဆုံတဲ့နေရာ", en: "Where freelancers and small businesses meet" },
   "jobs.all": { my: "အားလုံး", en: "All" },
   "jobs.hiring": { my: "လူငှားမည်", en: "Hiring" },
@@ -305,6 +305,7 @@ export const dict = {
   "ad.todo.ai": { my: "AI draft စစ်ရန်", en: "AI drafts to review" },
   "ad.offline": { my: "Database ကို ချိတ်မရပါ။ Internet ကို စစ်ပြီး ပြန်ကြိုးစားပါ။", en: "Can’t reach the database. Check your internet and try again." },
   "ad.retry": { my: "ပြန်ကြိုးစားမယ်", en: "Try again" },
+  "ad.storefront": { my: "ဆိုင်မျက်နှာစာ", en: "Storefront" },
   "ad.more": { my: "နောက်ထပ်", en: "More" },
   "ad.viewStore": { my: "ဆိုင်ကို ကြည့်ရန်", en: "View store" },
   "ad.logout": { my: "ထွက်မယ်", en: "Log out" },
@@ -443,7 +444,8 @@ export const dict = {
 
   // Footer / misc
   "footer.about": { my: "Game top-up, premium app နဲ့ digital product တွေကို KBZPay, Wave နဲ့ လွယ်ကူစွာ ဝယ်ယူနိုင်ပါတယ်။", en: "Game top-ups, premium apps and digital products — paid easily with KBZPay or Wave." },
-  "footer.store": { my: "ဆိုင်", en: "Store" },
+  "footer.store": { my: "မီနူး", en: "Menu" },
+  "footer.copyright": { my: "© {year} NexusKit — Game top-up နဲ့ digital product များ", en: "© {year} NexusKit — game top-ups and digital products" },
   "footer.contact": { my: "ဆက်သွယ်ရန်", en: "Contact" },
   "support.chat": { my: "Telegram မှာ မေးမယ်", en: "Chat on Telegram" },
   "lang.switch": { my: "English", en: "မြန်မာ" },
@@ -452,8 +454,12 @@ export const dict = {
 
 export type TKey = keyof typeof dict;
 
-export function translate(lang: Lang, key: TKey, vars?: Record<string, string | number>): string {
-  let text: string = dict[key]?.[lang] ?? String(key);
+/** Admin-edited text: { "home.heroTitle": { my: "...", en: "..." } } */
+export type TextOverrides = Partial<Record<string, { my?: string; en?: string }>>;
+
+export function translate(lang: Lang, key: TKey, vars?: Record<string, string | number>, overrides?: TextOverrides): string {
+  const custom = overrides?.[key]?.[lang];
+  let text: string = (typeof custom === "string" && custom.trim() ? custom : null) ?? dict[key]?.[lang] ?? String(key);
   if (vars) for (const [k, v] of Object.entries(vars)) text = text.split(`{${k}}`).join(String(v));
   return text;
 }

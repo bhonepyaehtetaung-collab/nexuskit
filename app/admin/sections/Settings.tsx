@@ -214,19 +214,10 @@ export default function Settings({ data }: { data: AdminData }) {
         )}
       </Card>
 
-      <Card title={t("ad.s.contact")}>
+      <Card title={t("ad.s.contact")} sub={L("Footer နဲ့ Help မှာ ဒီ ၂ ခုပဲ ပြပါမယ်။ Footer စာသားကို ဆိုင်မျက်နှာစာ → စာသားများ မှာ ပြင်ပါ။", "Only these two are shown in the footer and Help. Edit footer text in Storefront → Text.")}>
         <div className="grid gap-3 sm:grid-cols-2">
-          {text("contact_email", L("အီးမေးလ်", "Email"), "email")}
-          {text("contact_phone", L("ဖုန်း", "Phone"), "tel")}
-          {text("location", L("တည်နေရာ", "Location"))}
           {text("telegram_url", "Telegram", "url", "https://t.me/…")}
-          {text("facebook_url", "Facebook", "url", "https://facebook.com/…")}
-          {text("instagram_url", "Instagram", "url", "https://instagram.com/…")}
-        </div>
-        <div>
-          <label className="label" htmlFor="s-footer">{t("ad.s.footer")}</label>
-          <textarea id="s-footer" className="field" rows={2} value={s.footer_description || ""} onChange={(e) => set("footer_description", e.target.value)} />
-          <p className="hint my">{t("ad.s.footerHint")}</p>
+          {text("contact_email", L("အီးမေးလ်", "Email"), "email")}
         </div>
       </Card>
 

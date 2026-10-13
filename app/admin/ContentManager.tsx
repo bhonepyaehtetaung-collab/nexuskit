@@ -127,6 +127,28 @@ function HubManager({ products }: { products: any[] }) {
   }, [supabase]);
   useEffect(() => { load(); }, [load]);
 
+  // AI draws an original cover picture (runs in the background, ~30 s)
+  const [drawing, setDrawing] = useState<string | null>(null);
+  const drawCover = async (postId: string) => {
+    setDrawing(postId);
+    try {
+      const res = await fetch("/api/ai/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "cover", post_id: postId }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Error ${res.status}`);
+      for (let i = 0; i < 60; i++) {
+        const { data: job } = await supabase.from("ai_jobs").select("status, error").eq("id", json.job_id).maybeSingle();
+        if (job?.status === "done") { toast("✓ Cover ready"); break; }
+        if (job?.status === "error") throw new Error(job.error || "AI error");
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+      load();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDrawing(null);
+    }
+  };
+
   const save = async () => {
     if (!edit) return;
     const slug = edit.slug || slugify(edit.title) || `post-${Date.now().toString(36)}`;
@@ -204,11 +226,17 @@ function HubManager({ products }: { products: any[] }) {
         {posts.length === 0 && <li className="p-5 text-sm text-muted">No posts yet.</li>}
         {posts.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-4">
+            <span className="h-12 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-raised">
+              {p.cover_url ? <img src={p.cover_url} alt="" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[10px] text-muted">No cover</span>}
+            </span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{p.title}</p>
               <p className="text-xs text-muted">{p.tag} · /hub/{p.slug} · {new Date(p.created_at).toLocaleDateString()}</p>
             </div>
             <span className={`badge ${p.published ? "bg-mint/15 text-mint" : "bg-raised text-muted"}`}>{p.published ? "Published" : "Draft"}</span>
+            <button type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={!!drawing} onClick={() => drawCover(p.id)}>
+              {drawing === p.id ? "🎨 Drawing… (~30s)" : p.cover_url ? "🎨 New AI cover" : "🎨 AI cover"}
+            </button>
             <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setEdit({ ...emptyPost, ...p, excerpt: p.excerpt || "", cover_url: p.cover_url || "", body: p.body || "", product_ids: p.product_ids || [] })}>Edit</button>
             <button type="button" className="btn-quiet px-3 py-1.5 text-xs text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("posts").delete().eq("id", p.id); load(); } }}>Delete</button>
           </li>

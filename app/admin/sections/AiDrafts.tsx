@@ -163,7 +163,7 @@ export default function AiDrafts({ data, role, onChange }: { data: AdminData; ro
 
         <button type="button" onClick={generate} disabled={busy} className="btn-primary btn-lg w-full">
           {busy ? (
-            <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> {mode === "news" ? L("Web မှာ ရှာနေပါတယ်… (၁ မိနစ်လောက်)", "Searching the web… (~1 min)") : L("AI ရေးနေပါတယ်…", "AI is drafting…")}</>
+            <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> {mode === "news" ? L("News ရှာပြီး ပုံဆွဲနေပါတယ်… (၁–၂ မိနစ်)", "Finding news & drawing covers… (1–2 min)") : L("AI ရေးနေပါတယ်…", "AI is drafting…")}</>
           ) : (
             <><PlusIcon size={18} /> {mode === "news" ? L("News ရှာပြီး draft ရေးမယ်", "Find news & draft") : L("AI နဲ့ draft ရေးမယ်", "Draft with AI")}</>
           )}
@@ -333,6 +333,14 @@ function DraftCard({ draft, data, L, onDecide }: { draft: Draft; data: AdminData
 
       {draft.kind === "post" && (
         <>
+          {d.cover_url ? (
+            <div className="relative overflow-hidden rounded-xl border border-line">
+              <img src={d.cover_url} alt="" className="aspect-[1200/630] w-full object-cover" />
+              <button type="button" onClick={() => set("cover_url", "")} className="absolute right-2 top-2 rounded-full bg-black/70 px-2.5 py-1 text-[11px] text-white">{L("ပုံဖယ်မယ်", "Remove picture")}</button>
+            </div>
+          ) : (
+            <p className="my rounded-xl border border-dashed border-line p-3 text-center text-xs text-muted">{L("ပုံမပါ — တင်ပြီးရင် Hub post မှာ “🎨 AI cover” နှိပ်ပြီး ဆွဲခိုင်းလို့ရပါတယ်", "No picture — after publishing, use “🎨 AI cover” in Hub posts")}</p>
+          )}
           <input className="field my font-medium" value={d.title || ""} onChange={(e) => set("title", e.target.value)} aria-label="Title" />
           <input className="field my text-sm" value={d.excerpt || ""} onChange={(e) => set("excerpt", e.target.value)} aria-label="Excerpt" />
           {showBody ? (

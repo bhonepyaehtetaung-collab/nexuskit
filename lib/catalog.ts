@@ -24,7 +24,7 @@ export function loadCatalog(): Promise<Catalog> {
     const supabase = createClient();
     cache = Promise.all([
       supabase.from("products").select("*").order("created_at", { ascending: false }),
-      supabase.from("product_categories").select("name").order("created_at", { ascending: true }),
+      supabase.from("product_categories").select("*").order("created_at", { ascending: true }),
       supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("payment_methods").select("id, provider_name"),
       supabase.from("bundles").select("*").eq("active", true).order("created_at", { ascending: false }),

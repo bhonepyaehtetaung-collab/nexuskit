@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 import { LANG_COOKIE, type Lang } from "./lang";
-import { translate, type TKey } from "./dict";
+import { translate, type TextOverrides, type TKey } from "./dict";
 
 export { translate };
 export type { TKey };
@@ -14,7 +14,7 @@ export type { Lang };
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (key: TKey, vars?: Record<string, string | number>) => string };
 const LangContext = createContext<Ctx | null>(null);
 
-export function LangProvider({ initialLang, children }: { initialLang: Lang; children: ReactNode }) {
+export function LangProvider({ initialLang, overrides, children }: { initialLang: Lang; overrides?: TextOverrides; children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
   const setLang = useCallback((l: Lang) => {
     setLangState(l);
@@ -25,7 +25,7 @@ export function LangProvider({ initialLang, children }: { initialLang: Lang; chi
       /* ignore */
     }
   }, []);
-  const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
+  const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars, overrides), [lang, overrides]);
   return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;
 }
 

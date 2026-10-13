@@ -1,6 +1,7 @@
 // Server-side only. Creates AI drafts and sends them to the owner's Telegram.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { draftJob, draftNews, extractProducts, type AiImage, type PricingRules } from "./ai";
+import { randomUUID } from "crypto";
+import { draftCoverSvg, draftJob, draftNews, extractProducts, type AiImage, type PricingRules } from "./ai";
 import { escapeHtml } from "./telegram";
 
 export type DraftKind = "products" | "job" | "news";
@@ -65,12 +66,14 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
       products: Array.from(new Set((products.data || []).map((p: any) => String(p.name).split(/[ ,(—-]/)[0]))),
       existingTitles: [...(posts.data || []).map((p: any) => p.title), ...(pending.data || []).map((d: any) => d.data?.title)].filter(Boolean),
     });
-    rows = news.map((p) => ({
+    // Draw a cover for each post (in parallel). A failed picture never blocks the post.
+    const covers = await Promise.all(news.map((p) => makeCover(db, p).catch(() => null)));
+    rows = news.map((p, i) => ({
       kind: "post",
       origin,
       sources: p.sources,
       source: input.topic || null,
-      data: { title: p.title, excerpt: p.excerpt, body: p.body, tag: p.tag },
+      data: { title: p.title, excerpt: p.excerpt, body: p.body, tag: p.tag, cover_url: covers[i] },
     }));
   }
 
@@ -78,6 +81,15 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
   const { data, error } = await db.from("ai_drafts").insert(rows).select("*");
   if (error) throw new Error(error.message);
   return data || [];
+}
+
+/** Ask the AI for a cover picture, store it in the public products bucket, return its URL. */
+export async function makeCover(db: SupabaseClient, post: { title: string; excerpt?: string; tag?: string }): Promise<string> {
+  const svg = await draftCoverSvg(post);
+  const path = `covers/ai_${randomUUID()}.svg`;
+  const { error } = await db.storage.from("products").upload(path, new Blob([svg], { type: "image/svg+xml" }), { contentType: "image/svg+xml", upsert: false });
+  if (error) throw new Error(error.message);
+  return db.storage.from("products").getPublicUrl(path).data.publicUrl;
 }
 
 /* ------------------------------------------------------------------ */

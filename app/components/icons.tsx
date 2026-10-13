@@ -104,3 +104,6 @@ export const LogoutIcon = (p: IconProps) => (
 export const SparkIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4" /><path d="m12 8 1.5 2.5L16 12l-2.5 1.5L12 16l-1.5-2.5L8 12l2.5-1.5Z" /></svg>
 );
+export const BrushIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8l-2.9-2.9L18.4 2.6Z" /><path d="M8.1 12.9c-2.1 0-3.6 1.6-3.6 3.6 0 1.8-1.5 2.9-2.5 3 1.2 1.3 3 2 4.9 2 3 0 4.9-2.2 4.9-4.9" /></svg>
+);

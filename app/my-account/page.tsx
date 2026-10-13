@@ -204,7 +204,6 @@ function HelpSection() {
         <p className="my text-sm text-muted">{t("help.sub")}</p>
         <div className="flex flex-wrap gap-2">
           {telegram && <a href={telegram} target="_blank" rel="noopener noreferrer" className="btn bg-[#2AABEE] text-white hover:bg-[#2AABEE]/90">{t("support.chat")}</a>}
-          {s.contact_phone && <a href={`tel:${String(s.contact_phone).replace(/\s/g, "")}`} className="btn-ghost">{s.contact_phone}</a>}
           {s.contact_email && <a href={`mailto:${s.contact_email}`} className="btn-ghost">{s.contact_email}</a>}
         </div>
       </div>

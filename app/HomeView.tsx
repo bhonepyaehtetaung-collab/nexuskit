@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
-import type { Category } from "@/lib/categories";
+import { categoryLabel, type Category } from "@/lib/categories";
 import { categoryHue, categoryKey } from "@/lib/format";
 import { useRenewals } from "@/lib/renewals";
 import ProductCard, { ProductArt } from "./components/ProductCard";
@@ -127,7 +127,7 @@ export default function HomeView({
   bundles: any[];
   paymentMethods: { id: string | number; provider_name: string }[];
 }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const router = useRouter();
   const params = useSearchParams();
   const active = params.get("cat") || "all";
@@ -193,7 +193,7 @@ export default function HomeView({
                         <ProductArt product={{ image: c.image, name: c.name, product_type: c.name }} className="text-xl" />
                       </span>
                     </span>
-                    <span className={`line-clamp-2 text-xs font-medium leading-tight ${on ? "text-text" : ""}`}>{c.name}</span>
+                    <span className={`line-clamp-2 text-xs font-medium leading-tight ${on ? "text-text" : ""}`}>{categoryLabel(c, lang)}</span>
                     <span className="-mt-1.5 text-[11px] text-muted">{t("home.items", { n: c.count })}</span>
                   </button>
                 </li>
@@ -206,7 +206,7 @@ export default function HomeView({
       {/* All products */}
       <section ref={gridRef} className="scroll-mt-20" aria-labelledby="grid-title">
         <h2 id="grid-title" className="my mb-3 font-display text-xl font-bold sm:text-2xl">
-          {categories.find((c) => c.key === active)?.name || t("store.products")}
+          {(() => { const c = categories.find((x) => x.key === active); return c ? categoryLabel(c, lang) : t("store.products"); })()}
         </h2>
         <div className="sticky top-16 z-30 -mx-4 mb-4 space-y-3 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
           <div className="flex gap-2">
@@ -228,7 +228,7 @@ export default function HomeView({
             <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label={t("home.categories")}>
               <button type="button" className="chip py-1.5" aria-pressed={active === "all"} onClick={() => setCategory("all")}>{t("store.all")}</button>
               {categories.map((c) => (
-                <button key={c.key} type="button" className="chip py-1.5" aria-pressed={active === c.key} onClick={() => setCategory(c.key)}>{c.name}</button>
+                <button key={c.key} type="button" className="chip py-1.5" aria-pressed={active === c.key} onClick={() => setCategory(c.key)}>{categoryLabel(c, lang)}</button>
               ))}
             </div>
           )}

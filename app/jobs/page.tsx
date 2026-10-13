@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
-import { translate, type TKey } from "@/lib/dict";
-import { getLang } from "@/lib/server-lang";
+import { getT } from "@/lib/server-lang";
+import type { TKey } from "@/lib/dict";
 import { PlusIcon, ShieldIcon } from "../components/icons";
 
-export const metadata = { title: "Jobs" };
+export const metadata = { title: "Job Board" };
 
 const KINDS = ["hiring", "offering"] as const;
 
@@ -20,8 +20,7 @@ function contactHref(contact: string): string | null {
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   const { kind } = await searchParams;
   const active = KINDS.includes(kind as any) ? kind : null;
-  const lang = await getLang();
-  const t = (k: TKey, v?: Record<string, string | number>) => translate(lang, k, v);
+  const { lang, t } = await getT();
 
   const supabase = createClient();
   let query = supabase
