@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useT } from "@/lib/i18n";
 
@@ -41,6 +41,87 @@ const PROVIDERS: { id: Provider; name: string; className: string; icon: React.Re
     ),
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Google button shown on our own page (Google Identity Services).     */
+/* The account picker then says "continue to NexusKit / this site"     */
+/* instead of the Supabase project domain.                              */
+/* ------------------------------------------------------------------ */
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+
+let gisScript: Promise<void> | null = null;
+function loadGis(): Promise<void> {
+  if (!gisScript) {
+    gisScript = new Promise((resolve, reject) => {
+      if ((window as any).google?.accounts?.id) return resolve();
+      const el = document.createElement("script");
+      el.src = "https://accounts.google.com/gsi/client";
+      el.async = true;
+      el.onload = () => resolve();
+      el.onerror = () => {
+        gisScript = null;
+        reject(new Error("Google sign-in could not load"));
+      };
+      document.head.appendChild(el);
+    });
+  }
+  return gisScript;
+}
+
+async function makeNonce(): Promise<[string, string]> {
+  const raw = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  return [raw, Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("")];
+}
+
+function GoogleButton({ onError }: { onError: (msg: string) => void }) {
+  const { lang } = useT();
+  const box = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [raw, hashed] = await makeNonce();
+        await loadGis();
+        if (!alive || !box.current) return;
+        const google = (window as any).google;
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          nonce: hashed,
+          use_fedcm_for_prompt: true,
+          callback: async (res: { credential: string }) => {
+            const { error } = await createClient().auth.signInWithIdToken({ provider: "google", token: res.credential, nonce: raw });
+            if (error) onError(error.message);
+          },
+        });
+        google.accounts.id.renderButton(box.current, {
+          theme: "filled_black",
+          size: "large",
+          shape: "pill",
+          text: "continue_with",
+          logo_alignment: "center",
+          width: Math.min(400, box.current.offsetWidth || 320),
+          locale: lang === "my" ? "my" : "en",
+        });
+        setReady(true);
+      } catch (err: any) {
+        onError(err.message);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [lang, onError]);
+
+  return (
+    <div className="relative min-h-11">
+      {!ready && <div className="absolute inset-0 animate-pulse rounded-full bg-raised" aria-hidden="true" />}
+      <div ref={box} className="flex justify-center [color-scheme:normal]" />
+    </div>
+  );
+}
 
 /** Which social logins are switched on in Supabase (Authentication → Providers). */
 let enabledCache: Promise<Provider[]> | null = null;
@@ -94,7 +175,8 @@ export default function SocialLogin({ next = "/my-account", divider = true }: { 
 
   return (
     <div className="space-y-3">
-      {PROVIDERS.filter((p) => enabled.includes(p.id)).map((p) => (
+      {enabled.includes("google") && GOOGLE_CLIENT_ID && <GoogleButton onError={setError} />}
+      {PROVIDERS.filter((p) => enabled.includes(p.id) && !(p.id === "google" && GOOGLE_CLIENT_ID)).map((p) => (
         <button key={p.id} type="button" disabled={!!busy} onClick={() => signIn(p.id)} className={`btn btn-lg w-full gap-3 ${p.className}`}>
           {p.icon}
           <span className="my">{busy === p.id ? t("acc.redirecting") : t("acc.withProvider", { p: p.name })}</span>

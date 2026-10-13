@@ -453,7 +453,7 @@ $$;
 revoke all on function public.create_order(text, text, text, jsonb, jsonb, text, text, text) from public;
 revoke all on function public.submit_payment_slip(text, text) from public;
 revoke all on function public.check_promo_code(text) from public;
-grant execute on function public.create_order(text, text, text, jsonb, jsonb, text, text, text) to anon, authenticated;
+grant execute on function public.create_order(text, text, text, jsonb, jsonb, text, text, text) to authenticated;
 grant execute on function public.submit_payment_slip(text, text) to authenticated;
 grant execute on function public.check_promo_code(text) to anon, authenticated;
 

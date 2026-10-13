@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import LoginPanel from "../components/LoginPanel";
 import { createClient } from "@/utils/supabase/client";
 import { useCart } from "@/app/context/cartContext";
 import { formatPrice } from "@/lib/format";
@@ -58,6 +59,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
 
   const [email, setEmail] = useState("");
+  const [user, setUser] = useState<any>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [info, setInfo] = useState<Record<string, string>>({});
@@ -96,8 +98,9 @@ export default function CheckoutPage() {
       setMethods(list);
       setSettings(settingsRes.data || { enable_pay_later: true });
       if (list.length === 1) setMethod((m) => m || String(list[0].id));
-      const userEmail = userRes.data.user?.email;
-      if (userEmail) setEmail((e) => e || userEmail);
+      const u = userRes.data.user;
+      setUser(u ?? null);
+      if (u?.email) setEmail(u.email);
       if (productsRes.data) {
         synced.current = true;
         dispatch({ type: "SYNC_PRODUCTS", payload: productsRes.data });
@@ -106,6 +109,15 @@ export default function CheckoutPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
+
+  // Signing in on this page (Google / email link) updates the form at once.
+  useEffect(() => {
+    const { data } = createClient().auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user?.email) setEmail(session.user.email);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!slip) {
@@ -227,6 +239,23 @@ export default function CheckoutPage() {
     );
   }
 
+  // Orders are tied to a signed-in, verified email (so access details can't get lost).
+  if (!user) {
+    return (
+      <div className="container-page flex flex-1 flex-col items-center justify-center py-10">
+        <div className="w-full max-w-md space-y-4">
+          <Link href="/cart" className="inline-flex items-center gap-2 text-sm text-muted hover:text-text">
+            <ArrowLeftIcon size={16} /> {t("cart.title")}
+          </Link>
+          <div className="panel p-6 sm:p-8">
+            <LoginPanel next="/checkout" title={t("co.loginTitle")} sub={t("co.loginSub")} />
+          </div>
+          <p className="my text-center text-xs text-muted">{t("co.loginWhy")}</p>
+        </div>
+      </div>
+    );
+  }
+
   const submitLabel = submitting ? t("co.placing") : isPayLater ? t("co.requestSetup") : t("co.place");
   const submitClass = isPayLater ? "btn bg-mint text-ink hover:bg-mint/90" : "btn-primary";
   let step = 0;
@@ -244,7 +273,7 @@ export default function CheckoutPage() {
             <div className="space-y-4">
               <div>
                 <label htmlFor="email" className="label">{t("co.email")}</label>
-                <input id="email" required type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field" placeholder="you@gmail.com" maxLength={254} />
+                <input id="email" type="email" value={email} readOnly className="field cursor-not-allowed opacity-80" />
                 <p className="hint my">{t("co.emailHint")}</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">

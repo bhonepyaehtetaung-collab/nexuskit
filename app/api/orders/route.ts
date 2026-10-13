@@ -45,7 +45,13 @@ export async function POST(request: Request) {
     return badRequest("Invalid request");
   }
 
-  const email = str(payload.email, 254).toLowerCase();
+  // Orders belong to the signed-in customer's verified email (not whatever was typed).
+  const supabase = createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user?.email || !auth.user.email_confirmed_at) {
+    return badRequest("Order တင်ဖို့ login အရင်ဝင်ပါ။", 401);
+  }
+  const email = auth.user.email.toLowerCase();
   const name = str(payload.name, 100);
   const phone = str(payload.phone, 40);
   const paymentMethod = str(payload.paymentMethod, 64);
@@ -75,7 +81,6 @@ export async function POST(request: Request) {
     }
   }
 
-  const supabase = createClient();
   const isPayLater = paymentMethod === "pay-later";
 
   // Upload the slip to the PRIVATE bucket first.
