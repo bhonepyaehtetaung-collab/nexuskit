@@ -2,35 +2,142 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ */
+/* NexusKit design tokens                                              */
+/* ink navy base · periwinkle brand · amber "pass" for prices          */
+/* ------------------------------------------------------------------ */
 :root {
-  --background-start-rgb: 10, 10, 10;
-  --background-end-rgb: 5, 5, 5;
+  --ink: 13 17 32;          /* #0D1120  page background   */
+  --surface: 21 26 44;      /* #151A2C  cards             */
+  --raised: 28 34 56;       /* #1C2238  inputs, hovers    */
+  --line: 42 49 80;         /* #2A3150  borders           */
+  --text: 236 238 246;      /* #ECEEF6  body text         */
+  --muted: 154 161 185;     /* #9AA1B9  secondary text    */
+  --brand: 138 125 255;     /* #8A7DFF  links, accents    */
+  --brand-strong: 110 94 245; /* #6E5EF5 primary buttons  */
+  --pass: 255 200 90;       /* #FFC85A  prices, pass stub */
+  --mint: 61 217 160;       /* #3DD9A0  success           */
+  --danger: 255 107 122;    /* #FF6B7A  errors            */
+  --info: 90 184 255;       /* #5AB8FF  info              */
+
+  color-scheme: dark;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
 body {
-  color: white;
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  @apply bg-ink text-text font-sans;
   min-height: 100vh;
   overflow-x: hidden;
+  text-rendering: optimizeLegibility;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #0a0a0a; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+/* Burmese script needs taller lines than Latin text */
+:lang(my),
+.my {
+  line-height: 1.8;
+}
 
-/* Autofill Fix */
+::selection {
+  background: rgb(var(--brand) / 0.35);
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid rgb(var(--brand));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgb(var(--ink)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--muted) / 0.5); }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Autofill fix */
 input:-webkit-autofill,
-input:-webkit-autofill:hover, 
-input:-webkit-autofill:focus, 
-input:-webkit-autofill:active{
-    -webkit-box-shadow: 0 0 0 30px #111 inset !important;
-    -webkit-text-fill-color: white !important;
-    transition: background-color 5000s ease-in-out 0s;
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgb(var(--raised)) inset !important;
+  -webkit-text-fill-color: rgb(var(--text)) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold
+           transition-[background-color,color,transform,opacity] duration-150 active:scale-[0.98]
+           disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary { @apply btn bg-brand-strong text-white hover:bg-brand; }
+  .btn-pass { @apply btn bg-pass text-ink hover:bg-pass/90; }
+  .btn-ghost { @apply btn bg-raised text-text hover:bg-line; }
+  .btn-quiet { @apply btn bg-transparent text-muted hover:bg-raised hover:text-text; }
+  .btn-lg { @apply px-6 py-4 text-base; }
+
+  /* Form fields */
+  .field {
+    @apply w-full rounded-xl border border-line bg-raised px-4 py-3 text-sm text-text
+           placeholder:text-muted/70 outline-none transition-colors
+           focus:border-brand focus:ring-2 focus:ring-brand/25;
+  }
+  .label { @apply mb-1.5 block text-sm font-medium text-text; }
+  .hint { @apply mt-1.5 text-xs text-muted; }
+
+  /* Surfaces */
+  .panel { @apply rounded-2xl border border-line bg-surface; }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface
+           px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text;
+  }
+  .chip[aria-pressed="true"] { @apply border-brand bg-brand/15 text-text; }
+
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold; }
+
+  /* The "digital pass": a card with a perforated tear line and two notches */
+  .pass {
+    @apply relative overflow-hidden rounded-pass border border-line bg-surface;
+  }
+  .pass-tear {
+    position: relative;
+    height: 0;
+    border-top: 2px dashed rgb(var(--line));
+    margin: 0 18px;
+  }
+  .pass-tear::before,
+  .pass-tear::after {
+    content: "";
+    position: absolute;
+    top: -12px;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    background: rgb(var(--ink));
+    border: 1px solid rgb(var(--line));
+  }
+  .pass-tear::before { left: -30px; }
+  .pass-tear::after { right: -30px; }
+
+  .price { @apply font-display font-bold tabular-nums text-pass; }
+
+  .container-page { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
 }

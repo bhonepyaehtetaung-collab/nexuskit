@@ -1,25 +1,38 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Navbar from "./Navbar";
-import Footer from "./Footer";
 import { ReactNode } from "react";
+import Navbar, { MobileTabBar } from "./Navbar";
+import Footer from "./Footer";
+import CartDrawer, { Toaster } from "./CartDrawer";
+import SupportButton from "./SupportButton";
+import { useT } from "@/lib/i18n";
 
+/** Store pages get the header, footer, cart and tab bar; /admin gets none. */
 export default function ConditionalUI({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "/";
+  const { t } = useT();
 
-  // URL သည် /admin ဖြင့် စတင်နေပါက (Admin Dashboard သို့မဟုတ် Login Page ဖြစ်ပါက)
-  // Navbar နှင့် Footer ကို မပြဘဲ အတွင်းက Content (children) ကိုသာ ပြမည်။
   if (pathname.startsWith("/admin")) {
     return <>{children}</>;
   }
 
-  // Admin URL မဟုတ်ပါက (သာမန် Customer View ဖြစ်ပါက) Navbar နှင့် Footer ကို ပြမည်။
+  const isCheckout = pathname.startsWith("/checkout");
+
   return (
     <>
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-brand-strong focus:px-4 focus:py-2 focus:text-white">
+        {t("nav.skip")}
+      </a>
       <Navbar />
-      <main className="flex-1 flex flex-col">{children}</main>
-      <Footer />
+      <main id="main" className="flex flex-1 flex-col">
+        {children}
+      </main>
+      {!isCheckout && <Footer />}
+      {!isCheckout && <MobileTabBar />}
+      {!isCheckout && !pathname.startsWith("/products/") && !pathname.startsWith("/bundles/") && <SupportButton />}
+      <CartDrawer />
+      <Toaster />
     </>
   );
 }

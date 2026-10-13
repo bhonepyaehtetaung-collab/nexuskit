@@ -1,86 +1,79 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import Link from "next/link";
+import { Logo } from "./Navbar";
+import { MailIcon, PhoneIcon, PinIcon } from "./icons";
+import { useT } from "@/lib/i18n";
+
+/** Only allow http(s) links from settings (blocks javascript: URLs). */
+const safeUrl = (url: unknown) => (typeof url === "string" && /^https?:\/\//i.test(url) ? url : null);
 
 export default function Footer() {
   const [settings, setSettings] = useState<any>({});
-  const supabase = createClient();
+  const { t } = useT();
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      const { data } = await supabase.from("site_settings").select("*").eq("id", 1).single();
-      if (data) setSettings(data);
-    };
-    fetchSettings();
+    createClient()
+      .from("site_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle()
+      .then(({ data }) => data && setSettings(data));
   }, []);
 
+  const socials = [
+    { name: "Facebook", url: safeUrl(settings.facebook_url) },
+    { name: "Telegram", url: safeUrl(settings.telegram_url) },
+    { name: "Instagram", url: safeUrl(settings.instagram_url) },
+  ].filter((s) => s.url);
+
   return (
-    <footer className="bg-[#050505] border-t border-white/10 pt-16 pb-8 mt-auto">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-          
-          {/* Brand & Description */}
-          <div className="space-y-4">
-            <Link href="/" className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-600 hover:opacity-80 transition-opacity">
-              NexusKit
-            </Link>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-sm">
-              {settings?.footer_description || "Premium digital assets, UI kits, and resources for modern creators. Elevate your next project with us."}
-            </p>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="text-white font-bold mb-4 uppercase tracking-wider text-sm">Quick Links</h4>
-            <ul className="space-y-3">
-              <li><Link href="/" className="text-gray-400 hover:text-indigo-400 transition-colors text-sm font-medium">Home</Link></li>
-              <li><Link href="/products" className="text-gray-400 hover:text-indigo-400 transition-colors text-sm font-medium">Shop</Link></li>
-              <li><Link href="/about" className="text-gray-400 hover:text-indigo-400 transition-colors text-sm font-medium">About Us</Link></li>
-              <li><Link href="/contact" className="text-gray-400 hover:text-indigo-400 transition-colors text-sm font-medium">Contact</Link></li>
-            </ul>
-          </div>
-
-          {/* Contact & Socials */}
-          <div>
-            <h4 className="text-white font-bold mb-4 uppercase tracking-wider text-sm">Connect With Us</h4>
-            <div className="space-y-3 mb-6">
-               <p className="text-gray-400 text-sm flex items-start gap-2">
-                 <span className="text-indigo-400">📍</span> 
-                 <span>{settings?.location || "Yangon, Myanmar"}</span>
-               </p>
-               <p className="text-gray-400 text-sm flex items-start gap-2">
-                 <span className="text-indigo-400">📧</span> 
-                 <span>{settings?.contact_email || "support@nexuskit.com"}</span>
-               </p>
-               <p className="text-gray-400 text-sm flex items-start gap-2">
-                 <span className="text-indigo-400">📞</span> 
-                 <span>{settings?.contact_phone || "+95 9123 456 789"}</span>
-               </p>
-            </div>
-            
-            {/* Dynamic Social Links */}
-            <div className="flex space-x-4">
-              {settings?.facebook_url && (
-                <a href={settings.facebook_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-400 transition-all text-white shadow-lg">FB</a>
-              )}
-              {settings?.telegram_url && (
-                <a href={settings.telegram_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-blue-500 hover:border-blue-400 transition-all text-white shadow-lg">TG</a>
-              )}
-              {settings?.instagram_url && (
-                <a href={settings.instagram_url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-pink-600 hover:border-pink-500 transition-all text-white shadow-lg">IG</a>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Copyright */}
-        <div className="border-t border-white/10 pt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center">
-          <p className="text-gray-500 text-sm font-medium">
-            {settings?.footer_text || "© 2026 NexusKit. All rights reserved."}
+    <footer className="mt-auto border-t border-line pb-24 pt-12 md:pb-10">
+      <div className="container-page grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="max-w-sm space-y-4">
+          <Logo />
+          <p className="my text-sm leading-relaxed text-muted">
+            {settings.footer_description || t("footer.about")}
           </p>
         </div>
+
+        <nav aria-label="Footer">
+          <h2 className="mb-3 text-sm font-semibold">{t("footer.store")}</h2>
+          <ul className="space-y-2 text-sm text-muted">
+            <li><Link href="/" className="hover:text-text">{t("nav.store")}</Link></li>
+            <li><Link href="/hub" className="hover:text-text">{t("nav.hub")}</Link></li>
+            <li><Link href="/jobs" className="hover:text-text">{t("nav.jobs")}</Link></li>
+            <li><Link href="/my-account" className="hover:text-text">{t("nav.myAccount")}</Link></li>
+            <li><Link href="/my-account#help" className="hover:text-text">{t("help.title")}</Link></li>
+          </ul>
+        </nav>
+
+        <div>
+          <h2 className="mb-3 text-sm font-semibold">{t("footer.contact")}</h2>
+          <ul className="space-y-2 text-sm text-muted">
+            <li className="flex items-center gap-2"><PinIcon size={16} />{settings.location || "Yangon, Myanmar"}</li>
+            {settings.contact_email && (
+              <li><a href={`mailto:${settings.contact_email}`} className="flex items-center gap-2 hover:text-text"><MailIcon size={16} />{settings.contact_email}</a></li>
+            )}
+            {settings.contact_phone && (
+              <li><a href={`tel:${String(settings.contact_phone).replace(/\s/g, "")}`} className="flex items-center gap-2 hover:text-text"><PhoneIcon size={16} />{settings.contact_phone}</a></li>
+            )}
+          </ul>
+          {socials.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {socials.map((s) => (
+                <a key={s.name} href={s.url!} target="_blank" rel="noopener noreferrer" className="chip py-1.5">
+                  {s.name}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="container-page mt-10 border-t border-line pt-6 text-xs text-muted">
+        {settings.footer_text || `© ${new Date().getFullYear()} NexusKit. All rights reserved.`}
       </div>
     </footer>
   );

@@ -1,256 +1,482 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useCart } from "@/app/context/cartContext";
+import { useT } from "@/lib/i18n";
+import { daysUntil, formatPrice, STATUS_TONE } from "@/lib/format";
+import { ProductArt } from "../components/ProductCard";
+import { findRenewals } from "@/lib/renewals";
+import { useCatalog } from "@/lib/catalog";
+import { CheckIcon, CloseIcon, CopyIcon, KeyIcon, MailIcon, UploadIcon } from "../components/icons";
 
-export default function CustomerPortal() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  
-  const [user, setUser] = useState<any>(null);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
-  const [fetchingData, setFetchingData] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [slipFile, setSlipFile] = useState<File | null>(null);
-  const [uploadingSlipId, setUploadingSlipId] = useState<string | null>(null);
+type Order = any;
 
-  const supabase = createClient();
+const isPayLaterOrder = (o: Order) => o.payment_method === "pay_later" || String(o.slip_url || "").includes("placehold");
 
-  useEffect(() => { checkUser(); }, []);
+/** Placed → Checking → Delivered progress for one order. */
+function OrderProgress({ order }: { order: Order }) {
+  const { t } = useT();
+  if (order.status === "cancelled") return null;
+  const payLater = isPayLaterOrder(order);
+  const steps = payLater ? [t("prog.requested"), t("prog.setup"), t("prog.paid")] : [t("prog.placed"), t("prog.checking"), t("prog.delivered")];
+  const hasSlip = order.slip_url && !String(order.slip_url).includes("placehold");
+  const current = order.status === "completed" ? 3 : order.status === "awaiting_payment" ? 2 : payLater && hasSlip ? 2 : 1;
+  return (
+    <ol className="flex items-center gap-2 text-xs" aria-label="Order progress">
+      {steps.map((label, i) => {
+        const done = i < current;
+        return (
+          <li key={label} className="flex flex-1 flex-col gap-1.5">
+            <span className={`h-1.5 rounded-full ${done ? "bg-mint" : "bg-raised"}`} />
+            <span className={done ? "text-text" : "text-muted"}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
-  const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      setUser(session.user);
-      fetchMyOrders(session.user.email);
-    } else { setFetchingData(false); }
-  };
-const [notification, setNotification] = useState<{title: string, desc: string, type: 'success' | 'warning'} | null>(null);
-// 🌟 Supabase Real-time Alerts for Customer 🌟
-  useEffect(() => {
-    checkUser();
-    
-    // Customer ရဲ့ Email နဲ့ ညီတဲ့ အော်ဒါ ပြောင်းလဲမှုများကိုသာ ဖမ်းယူမည်
-    if (user?.email) {
-      const channel = supabase.channel('customer-orders')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_email=eq.${user.email}` }, (payload: any) => {
-           
-           if (payload.new.status === 'completed' && payload.old.status !== 'completed') {
-               setNotification({ type: 'success', title: "✅ အော်ဒါ အောင်မြင်ပါသည်!", desc: "Credentials များကို ဝင်ရောက်ကြည့်ရှုနိုင်ပါပြီ။" });
-               fetchMyOrders(user.email);
-               setTimeout(() => setNotification(null), 8000);
-           } 
-           else if (payload.new.status === 'awaiting_payment' && payload.old.status !== 'awaiting_payment') {
-               setNotification({ type: 'warning', title: "⚠️ အကောင့် Setup ပြီးပါပြီ!", desc: "ကျေးဇူးပြု၍ ငွေလွှဲပြေစာ (Slip) တင်ပေးပါ။" });
-               fetchMyOrders(user.email);
-               setTimeout(() => setNotification(null), 8000);
-           }
-
-        })
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); }
-    }
-  }, [user?.email]);
-  const fetchMyOrders = async (userEmail: string | undefined) => {
-    if (!userEmail) return;
-    const { data } = await supabase.from("orders").select("*").eq("customer_email", userEmail).order("created_at", { ascending: false });
-    if (data) setMyOrders(data);
-    setFetchingData(false);
-  };
-
-  const handleMagicLinkLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setMessage("");
-    const { error } = await supabase.auth.signInWithOtp({ email: email, options: { emailRedirectTo: `${window.location.origin}/my-account` } });
-    if (error) setMessage("Error: " + error.message);
-    else setMessage("✨ Login link ပို့လိုက်ပါပြီ! သင့် Email ကို စစ်ဆေးပြီး Link ကို နှိပ်ပါ။");
-    setLoading(false);
-  };
-
-  const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setMyOrders([]); };
-
-  const handleUploadSlip = async (orderId: string) => {
-      if (!slipFile) return alert("ကျေးဇူးပြု၍ ငွေလွှဲပြေစာ ပုံရွေးချယ်ပေးပါ");
-      setUploadingSlipId(orderId);
-      try {
-          const fileExt = slipFile.name.split('.').pop();
-          const fileName = `slip_post_${Date.now()}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage.from("products").upload(fileName, slipFile);
-          if (uploadError) throw uploadError;
-          const slipUrl = supabase.storage.from("products").getPublicUrl(fileName).data.publicUrl;
-          const { error: updateError } = await supabase.from("orders").update({ slip_url: slipUrl, status: "pending" }).eq("id", orderId);
-          if (updateError) throw updateError;
-
-          alert("ငွေလွှဲပြေစာ တင်ခြင်းအောင်မြင်ပါသည်။ Admin မှ စစ်ဆေးနေပါသည်။");
-          setSlipFile(null); setSelectedOrder(null); fetchMyOrders(user.email);
-      } catch (error: any) { alert("Error: " + error.message); } finally { setUploadingSlipId(null); }
-  };
-
-  if (fetchingData) return <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center animate-pulse font-bold">Loading Portal...</div>;
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center px-4 relative overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-indigo-600/20 rounded-full blur-[100px] -z-10"></div>
-        <div className="w-full max-w-md bg-white/5 border border-white/10 p-8 rounded-3xl shadow-2xl backdrop-blur-xl text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6">👤</div>
-          <h1 className="text-3xl font-black text-white mb-2">My Account</h1>
-          <p className="text-gray-400 text-sm mb-8">Enter the email you used during checkout.</p>
-          {message && <div className={`p-4 rounded-xl mb-6 text-sm font-bold ${message.includes('Error') ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{message}</div>}
-          <form onSubmit={handleMagicLinkLogin} className="space-y-4">
-            <input required type="email" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 text-center" />
-            <button disabled={loading} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50">{loading ? "Sending..." : "Send Login Link"}</button>
-          </form>
-        </div>
+function SubscriptionMeter({ item }: { item: any }) {
+  const { t } = useT();
+  const total = Number(item.subscription_days) || 0;
+  const left = daysUntil(item.end_date);
+  if (!total || left === null) return null;
+  const pct = Math.max(0, Math.min(100, (left / total) * 100));
+  const expired = left <= 0;
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="h-1.5 overflow-hidden rounded-full bg-raised">
+        <div className={`h-full rounded-full ${expired ? "bg-danger" : left <= 5 ? "bg-pass" : "bg-mint"}`} style={{ width: `${pct}%` }} />
       </div>
-    );
-  }
+      <p className={`text-xs ${expired ? "text-danger" : left <= 5 ? "text-pass" : "text-muted"}`}>
+        {expired ? t("acc.expired") : t("acc.daysLeft", { n: left })}
+      </p>
+    </div>
+  );
+}
+
+function CredentialsBox({ note }: { note: string }) {
+  const { t } = useT();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="rounded-xl border border-mint/30 bg-mint/5 p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="my flex items-center gap-2 text-sm font-semibold text-mint"><KeyIcon size={16} /> {t("acc.access")}</p>
+        <button
+          type="button"
+          className="btn-ghost px-3 py-1.5 text-xs"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(note);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            } catch { /* clipboard blocked */ }
+          }}
+        >
+          {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />} {copied ? t("co.copied") : t("co.copy")}
+        </button>
+      </div>
+      <pre className="whitespace-pre-wrap break-words rounded-lg bg-ink p-3 font-sans text-sm">{note}</pre>
+    </div>
+  );
+}
+
+function SlipUpload({ orderId, onDone }: { orderId: string; onDone: () => void }) {
+  const { t } = useT();
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+
+  const submit = async () => {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("orderId", orderId);
+      form.append("slip", file);
+      const res = await fetch("/api/orders/slip", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t("co.errGeneric"));
+      onDone();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-4 md:px-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white/5 border border-white/10 p-6 md:p-8 rounded-3xl mb-10 shadow-xl gap-4">
-          <div className="flex items-center gap-4">
-             <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-xl font-bold">{user.email?.charAt(0).toUpperCase()}</div>
-             <div><h1 className="text-xl md:text-2xl font-bold text-white">Welcome back!</h1><p className="text-gray-400 text-sm">{user.email}</p></div>
-          </div>
-          <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-xl font-bold transition-all text-sm">Logout</button>
+    <div className="space-y-3 rounded-xl border border-info/30 bg-info/5 p-4">
+      <p className="my text-sm">{t("acc.uploadNote")}</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button type="button" onClick={() => input.current?.click()} className="btn-ghost flex-1 justify-start truncate">
+          <UploadIcon size={16} /> {file ? file.name : t("acc.choose")}
+        </button>
+        <button type="button" onClick={submit} disabled={!file || busy} className="btn-primary">
+          {busy ? t("acc.uploading") : t("acc.send")}
+        </button>
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="sr-only"
+        onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); e.target.value = ""; }}
+      />
+      {error && <p className="my text-xs text-danger" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+function OrderPass({ order, onRefresh }: { order: Order; onRefresh: () => void }) {
+  const { t } = useT();
+  const router = useRouter();
+  const { addItem } = useCart();
+  const statusKey = `status.${order.status}` as Parameters<typeof t>[0];
+  const statusLabel = ["pending", "awaiting_payment", "completed", "cancelled"].includes(order.status) ? t(statusKey) : order.status;
+
+  const buyAgain = () => {
+    (order.items || []).forEach((item: any) => addItem(item, item.quantity || 1));
+    router.push("/cart");
+  };
+
+  return (
+    <article className="pass">
+      <div className="space-y-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted">
+            #{String(order.id).slice(0, 8)}
+            <span className="ml-2">{new Date(order.created_at).toLocaleDateString()}</span>
+          </p>
+          <span className={`badge ${STATUS_TONE[order.status] ?? "bg-raised text-muted"}`}>{statusLabel}</span>
         </div>
 
-        <h2 className="text-2xl font-bold mb-6 text-indigo-400">My Purchases & Subscriptions</h2>
-        
-        {myOrders.length === 0 ? (
-          <div className="bg-white/5 border border-white/10 p-12 rounded-3xl text-center">
-             <p className="text-gray-400 text-lg mb-6">You haven't purchased anything yet.</p>
-             <Link href="/shop" className="inline-block bg-indigo-600 px-8 py-3 rounded-xl font-bold shadow-lg">Browse Shop</Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {myOrders.map((order) => (
-                <div key={order.id} className="bg-white/5 border border-white/10 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row justify-between md:items-start gap-6 hover:border-indigo-500/30 transition-all">
-                   <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-sm font-mono text-gray-500">#{order.id.toString().slice(0,8)}</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                            order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 
-                            order.status === 'awaiting_payment' ? 'bg-blue-500/20 text-blue-400' : 
-                            'bg-yellow-500/20 text-yellow-400'
-                        }`}>
-                          {order.status === 'awaiting_payment' ? 'Payment Required' : order.status}
-                        </span>
-                      </div>
-                      
-                      {/* 🌟 ဤနေရာတွင် ပစ္စည်းတစ်ခုချင်းစီအတွက် UI ခွဲထုတ်ထားပါသည် 🌟 */}
-                      <div className="space-y-4">
-                        {(order.items || []).map((item: any, idx: number) => {
-                          const hasEndDate = item.end_date != null;
-                          let daysLeft = 0;
-                          if (hasEndDate) {
-                             daysLeft = Math.ceil((new Date(item.end_date).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-                          }
-                          const isSub = item.subscription_days && item.subscription_days > 0;
+        <OrderProgress order={order} />
 
-                          return (
-                            <div key={idx} className="flex items-start gap-4 p-3 bg-black/20 rounded-xl border border-white/5">
-                               <img src={item.image || "https://placehold.co/150"} className="w-14 h-14 rounded-lg object-cover bg-white/5 flex-shrink-0" />
-                               <div className="flex-1 min-w-0">
-                                 <p className="font-bold text-white text-base truncate">{item.name}</p>
-                                 <p className="text-xs text-gray-400 mb-1">Qty: {item.quantity || 1} • {item.product_type || "Asset"}</p>
-                                 
-                                 {/* Item Status Tag */}
-                                 {order.status === 'completed' && isSub && (
-                                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${daysLeft > 0 ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
-                                      {daysLeft > 0 ? `${daysLeft} Days Left` : 'Expired'}
-                                    </span>
-                                 )}
-                                 {order.status === 'completed' && !isSub && (
-                                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Lifetime / Permanent</span>
-                                 )}
-                               </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                   </div>
+        <ul className="space-y-3">
+          {(order.items || []).map((item: any, i: number) => (
+            <li key={i} className="flex gap-3">
+              <span className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl bg-raised">
+                <ProductArt product={item} className="text-sm" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-1 font-medium">{item.name}</p>
+                <p className="text-xs text-muted">× {item.quantity || 1}{item.product_type ? ` · ${item.product_type}` : ""}</p>
+                {order.status === "completed" && <SubscriptionMeter item={item} />}
+              </div>
+            </li>
+          ))}
+        </ul>
 
-                   <div className="md:text-right border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 flex flex-col justify-end h-full">
-                      <p className="text-2xl font-black text-emerald-400 mb-4">${order.total_amount}</p>
-
-                      {order.status === 'completed' && (
-                        <button onClick={() => setSelectedOrder(order)} className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95">View Access Details</button>
-                      )}
-                      
-                      {order.status === 'awaiting_payment' && (
-                        <button onClick={() => setSelectedOrder(order)} className="bg-blue-600 hover:bg-blue-500 px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 animate-pulse">Upload Payment Slip</button>
-                      )}
-
-                      {order.status === 'pending' && (
-                        <p className={`text-sm italic mt-2 ${order.slip_url?.includes('placehold') ? 'text-emerald-400' : 'text-yellow-400'}`}>
-                          {order.slip_url?.includes('placehold') ? "Setting up your service..." : "Verifying payment..."}
-                        </p>
-                      )}
-                   </div>
-                </div>
-            ))}
-          </div>
+        {(order.status === "completed" || order.status === "awaiting_payment") && order.admin_note && <CredentialsBox note={order.admin_note} />}
+        {order.status === "awaiting_payment" && <SlipUpload orderId={String(order.id)} onDone={onRefresh} />}
+        {order.status === "pending" && (
+          <p className="my text-sm text-muted">{isPayLaterOrder(order) && !order.admin_note ? t("acc.pendingSetup") : t("acc.pendingPay")}</p>
         )}
       </div>
+      <div className="pass-tear" />
+      <div className="flex items-center justify-between gap-3 px-5 py-3">
+        <span className="price text-lg">{formatPrice(order.total_amount)}</span>
+        {(order.status === "completed" || order.status === "cancelled") && (order.items || []).length > 0 && (
+          <button type="button" onClick={buyAgain} className="btn-ghost px-4 py-2">{t("acc.buyAgain")}</button>
+        )}
+      </div>
+    </article>
+  );
+}
 
-      {/* --- 🌟 ORDER DETAILS MODAL 🌟 --- */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="bg-[#111] border border-white/10 p-6 md:p-8 rounded-3xl w-full max-w-xl shadow-2xl relative m-auto my-8">
-            <button onClick={() => setSelectedOrder(null)} className="absolute top-6 right-6 text-gray-400 hover:text-white font-black text-xl">✕</button>
-            <h3 className="text-2xl font-bold text-white mb-2">Order Info</h3>
-            <p className="text-sm text-emerald-400 font-mono mb-6 border-b border-white/10 pb-4">Order #{selectedOrder.id.toString().slice(0,8)}</p>
+/** Contact options and a short FAQ (replaces the old Contact/About pages). */
+function HelpSection() {
+  const { t } = useT();
+  const { data } = useCatalog();
+  const s = data?.settings || {};
+  const telegram = typeof s.telegram_url === "string" && /^https?:\/\//i.test(s.telegram_url) ? s.telegram_url : null;
+  const faqs = [["help.q1", "help.a1"], ["help.q2", "help.a2"], ["help.q3", "help.a3"]] as const;
+  return (
+    <section id="help" className="scroll-mt-20 space-y-4">
+      <h2 className="my font-display text-xl font-bold">{t("help.title")}</h2>
+      <div className="panel space-y-4 p-5">
+        <p className="my text-sm text-muted">{t("help.sub")}</p>
+        <div className="flex flex-wrap gap-2">
+          {telegram && <a href={telegram} target="_blank" rel="noopener noreferrer" className="btn bg-[#2AABEE] text-white hover:bg-[#2AABEE]/90">{t("support.chat")}</a>}
+          {s.contact_phone && <a href={`tel:${String(s.contact_phone).replace(/\s/g, "")}`} className="btn-ghost">{s.contact_phone}</a>}
+          {s.contact_email && <a href={`mailto:${s.contact_email}`} className="btn-ghost">{s.contact_email}</a>}
+        </div>
+      </div>
+      <div className="panel divide-y divide-line">
+        {faqs.map(([q, a]) => (
+          <details key={q} className="group p-5">
+            <summary className="my flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+              {t(q)}
+              <span className="text-muted transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+            </summary>
+            <p className="my mt-3 text-sm text-muted">{t(a)}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-            <div className="mt-4">
-               {/* Credentials */}
-               {selectedOrder.admin_note && (
-                 <div className="bg-emerald-500/10 p-5 rounded-xl border border-emerald-500/30 mb-6">
-                    <p className="text-xs text-emerald-400 mb-3 font-bold uppercase">🔐 Your Access Credentials:</p>
-                    <div className="font-mono text-emerald-50 text-sm bg-black p-4 rounded-xl border border-white/5 break-words">
-                       {selectedOrder.admin_note.split('\n').map((line: string, i: number) => <p key={i}>{line}</p>)}
-                    </div>
-                 </div>
-               )}
+function MyJobs() {
+  const { t } = useT();
+  const [jobs, setJobs] = useState<any[]>([]);
+  const supabase = useMemo(() => createClient(), []);
+  const load = useCallback(() => {
+    supabase.from("jobs").select("*").order("created_at", { ascending: false }).then(({ data, error }) => {
+      if (!error) setJobs(data || []);
+    });
+  }, [supabase]);
+  useEffect(load, [load]);
+  // Staff can read every job; only show the ones this person posted.
+  const [email, setEmail] = useState("");
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail((data.user?.email || "").toLowerCase())); }, [supabase]);
+  const mine = jobs.filter((j) => String(j.poster_email).toLowerCase() === email);
+  if (mine.length === 0) return null;
+  const tone: Record<string, string> = { pending: "bg-pass/15 text-pass", approved: "bg-mint/15 text-mint", rejected: "bg-danger/15 text-danger", closed: "bg-raised text-muted" };
+  return (
+    <section className="space-y-4">
+      <h2 className="my font-display text-xl font-bold">{t("jobs.mine")}</h2>
+      <ul className="panel divide-y divide-line">
+        {mine.map((j) => (
+          <li key={j.id} className="flex items-center gap-3 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{j.title}</p>
+              <span className={`badge mt-1 ${tone[j.status] || ""}`}>{t(`jobs.st.${j.status}` as any)}</span>
+            </div>
+            {(j.status === "approved" || j.status === "pending") && (
+              <button type="button" className="btn-ghost px-3 py-2 text-xs" onClick={async () => { await supabase.rpc("close_job", { p_id: String(j.id) }); load(); }}>
+                {t("jobs.close")}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-               {/* Awaiting Payment Form */}
-               {selectedOrder.status === 'awaiting_payment' ? (
-                 <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/30 mb-4">
-                    <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2"><span>⚠️</span> Payment Required</h4>
-                    <p className="text-sm text-blue-100/80 mb-4 leading-relaxed">
-                        ဝန်ဆောင်မှုကို အောင်မြင်စွာ Setup လုပ်ပေးပြီးပါပြီ။ အကောင့်ကို ဝင်ရောက်စမ်းသပ်ပြီး အဆင်ပြေပါက အောက်တွင် ငွေလွှဲပြေစာ (Slip) တင်ပေးပါရန် မေတ္တာရပ်ခံအပ်ပါသည်။
-                    </p>
-                    <input type="file" accept="image/*" onChange={e => setSlipFile(e.target.files?.[0] || null)} className="w-full bg-black/50 border border-blue-500/30 p-3 rounded-xl text-sm mb-4 text-gray-300" />
-                    <button 
-                        onClick={() => handleUploadSlip(selectedOrder.id)} 
-                        disabled={uploadingSlipId === selectedOrder.id}
-                        className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold shadow-lg transition-all disabled:opacity-50"
-                    >
-                        {uploadingSlipId === selectedOrder.id ? "Uploading..." : "ပြေစာတင်မည် (Upload Slip)"}
-                    </button>
-                 </div>
-               ) : (
-                 <div className="bg-white/5 p-5 rounded-xl border border-white/10">
-                    <p className="text-sm text-gray-300 leading-relaxed">
-                      <span className="text-indigo-400 font-bold block mb-1">Instruction: </span> 
-                      သက်ဆိုင်ရာ Application ထဲသို့ ဝင်ရောက်အသုံးပြုနိုင်ပါသည်။ အခက်အခဲရှိပါက Customer Support သို့ ဆက်သွယ်ပါ။
-                    </p>
-                 </div>
-               )}
+function LoginCard() {
+  const { t } = useT();
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sentTo, setSentTo] = useState("");
+  const [error, setError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const send = async () => {
+    setSending(true);
+    setError("");
+    const { error } = await createClient().auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/my-account` },
+    });
+    setSending(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setSentTo(email.trim());
+    setCooldown(60);
+  };
+
+  return (
+    <div className="container-page flex flex-1 items-center justify-center py-12">
+      <div className="panel w-full max-w-md space-y-6 p-6 sm:p-8">
+        <div className="space-y-2">
+          <h1 className="my font-display text-3xl font-bold">{t("acc.title")}</h1>
+          <p className="my text-sm text-muted">{t("acc.loginSub")}</p>
+        </div>
+
+        {sentTo ? (
+          <div className="space-y-4">
+            <div className="flex gap-3 rounded-xl border border-mint/30 bg-mint/5 p-4">
+              <MailIcon size={20} className="mt-0.5 flex-shrink-0 text-mint" />
+              <p className="my text-sm">{t("acc.sent", { email: sentTo })}</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="btn-ghost flex-1" onClick={() => setSentTo("")}>{t("acc.other")}</button>
+              <button type="button" className="btn-quiet flex-1" disabled={cooldown > 0 || sending} onClick={send}>
+                {cooldown > 0 ? t("acc.resendIn", { s: cooldown }) : t("acc.resend")}
+              </button>
             </div>
           </div>
+        ) : (
+          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="space-y-4">
+            <div>
+              <label htmlFor="login-email" className="label">{t("co.email")}</label>
+              <input id="login-email" required type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field" placeholder="you@gmail.com" />
+            </div>
+            {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+            <button disabled={sending} type="submit" className="btn-primary btn-lg w-full">
+              {sending ? t("acc.sending") : t("acc.sendLink")}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function MyAccountPage() {
+  const { t } = useT();
+  const supabase = useMemo(() => createClient(), []);
+  const [user, setUser] = useState<any>(null);
+  const [checking, setChecking] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [filter, setFilter] = useState<"all" | "active" | "done">("all");
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const fetchOrders = useCallback(async () => {
+    setLoadingOrders(true);
+    // RLS returns only orders placed with this account's confirmed email.
+    const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    setOrders(data || []);
+    setLoadingOrders(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null);
+      setChecking(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [supabase]);
+
+  // Load orders and listen for status changes made by the store.
+  useEffect(() => {
+    if (!user?.email) return;
+    fetchOrders();
+    const channel = supabase
+      .channel(`customer-orders-${user.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload: any) => {
+        const next = payload.new?.status;
+        const prev = payload.old?.status;
+        if (next === "completed" && prev !== "completed") setNotice(t("acc.notifyDone"));
+        else if (next === "awaiting_payment" && prev !== "awaiting_payment") setNotice(t("acc.notifySetup"));
+        fetchOrders();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.email, supabase, fetchOrders]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  if (checking) {
+    return <div className="container-page py-16"><div className="mx-auto h-64 max-w-md animate-pulse rounded-2xl bg-surface" /></div>;
+  }
+  if (!user) {
+    return (
+      <>
+        <LoginCard />
+        <div className="container-page max-w-md pb-16"><HelpSection /></div>
+      </>
+    );
+  }
+  const renewals = findRenewals(orders);
+
+  const visible = orders.filter((o) =>
+    filter === "all" ? true : filter === "done" ? ["completed", "cancelled"].includes(o.status) : !["completed", "cancelled"].includes(o.status),
+  );
+  const needsAction = orders.filter((o) => o.status === "awaiting_payment").length;
+
+  return (
+    <div className="container-page pb-16 pt-6 sm:pt-10">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-strong font-display text-lg font-bold text-white">
+            {String(user.email || "?").charAt(0).toUpperCase()}
+          </span>
+          <div>
+            <h1 className="my font-display text-2xl font-bold">{t("acc.title")}</h1>
+            <p className="text-sm text-muted">{user.email}</p>
+          </div>
+        </div>
+        <button type="button" onClick={async () => { await supabase.auth.signOut(); setOrders([]); }} className="btn-ghost">
+          {t("acc.logout")}
+        </button>
+      </header>
+
+      {needsAction > 0 && (
+        <p className="my mb-6 rounded-xl border border-info/30 bg-info/10 p-4 text-sm">{t("acc.needSlip", { n: needsAction })}</p>
+      )}
+
+      <div className="mb-5 flex gap-2" role="group" aria-label="Filter">
+        {([["all", t("acc.all")], ["active", t("acc.active")], ["done", t("acc.done")]] as const).map(([key, label]) => (
+          <button key={key} type="button" className="chip" aria-pressed={filter === key} onClick={() => setFilter(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loadingOrders && orders.length === 0 ? (
+        <div className="grid gap-5 md:grid-cols-2">{[0, 1].map((i) => <div key={i} className="h-64 animate-pulse rounded-pass bg-surface" />)}</div>
+      ) : orders.length === 0 ? (
+        <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+          <p className="my font-semibold">{t("acc.noOrders")}</p>
+          <p className="my max-w-sm text-sm text-muted">{t("acc.noOrdersSub")}</p>
+          <Link href="/" className="btn-primary mt-2">{t("cart.browse")}</Link>
+        </div>
+      ) : visible.length === 0 ? (
+        <p className="panel my p-8 text-center text-muted">{t("acc.noneHere")}</p>
+      ) : (
+        <div className="grid items-start gap-5 md:grid-cols-2">
+          {visible.map((order) => <OrderPass key={order.id} order={order} onRefresh={fetchOrders} />)}
         </div>
       )}
-      {/* 🌟 Real-time Toast Notification UI 🌟 */}
-      {notification && (
-        <div className={`fixed top-5 right-5 z-[1000] p-5 rounded-2xl shadow-2xl animate-in slide-in-from-top-5 border ${notification.type === 'success' ? 'bg-emerald-600 border-emerald-400' : 'bg-blue-600 border-blue-400'}`}>
-           <h4 className="font-bold text-white text-lg">{notification.title}</h4>
-           <p className="text-sm text-white/90 mt-1">{notification.desc}</p>
-           <button onClick={() => setNotification(null)} className="absolute top-2 right-3 text-white/50 hover:text-white">✕</button>
+
+      {renewals.length > 0 && (
+        <section className="mt-10 space-y-4">
+          <h2 className="my font-display text-xl font-bold">{t("renew.title")}</h2>
+          <ul className="panel divide-y divide-line">
+            {renewals.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 p-4">
+                <span className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-raised"><ProductArt product={r} className="text-xs" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{r.name}</p>
+                  <p className={`text-xs ${r.daysLeft <= 0 ? "text-danger" : "text-pass"}`}>{r.daysLeft <= 0 ? t("acc.expired") : t("acc.daysLeft", { n: r.daysLeft })}</p>
+                </div>
+                <Link href={`/products/${r.id}`} className="btn-pass px-4 py-2">{t("renew.button")}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="mt-10 space-y-10">
+        <MyJobs />
+        <HelpSection />
+      </div>
+
+      {notice && (
+        <div role="status" className="fixed inset-x-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-[60] mx-auto flex max-w-sm animate-slide-up items-start gap-3 rounded-2xl border border-mint/40 bg-raised p-4 shadow-2xl md:bottom-6 md:left-auto md:right-6 md:top-auto md:mx-0">
+          <CheckIcon size={18} className="mt-0.5 text-mint" />
+          <p className="my flex-1 text-sm">{notice}</p>
+          <button type="button" onClick={() => setNotice(null)} className="text-muted hover:text-text" aria-label={t("acc.dismiss")}>
+            <CloseIcon size={16} />
+          </button>
         </div>
       )}
     </div>

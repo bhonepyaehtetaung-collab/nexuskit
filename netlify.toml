@@ -1,0 +1,7 @@
+# Netlify builds the Next.js app automatically (OpenNext adapter).
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[functions]
+  directory = "netlify/functions"

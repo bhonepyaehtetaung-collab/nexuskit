@@ -1,126 +1,244 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
-import { useCart } from "@/app/context/cartContext";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useCart } from "@/app/context/cartContext";
+import { rememberedFields, rememberFields, useCatalog } from "@/lib/catalog";
+import { useT } from "@/lib/i18n";
+import { categoryKey, formatPrice, productFamily } from "@/lib/format";
+import { ProductArt } from "@/app/components/ProductCard";
+import { ArrowLeftIcon, BagIcon, CheckIcon, ClockIcon, KeyIcon, MinusIcon, PlusIcon, ShieldIcon } from "@/app/components/icons";
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <h2 className="my mb-4 flex items-center gap-3 font-semibold">
+        <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-brand-strong text-sm font-bold text-white">{n}</span>
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
 
 export default function ProductDetail() {
   const params = useParams();
-  const id = params?.id as string;
-  const { dispatch } = useCart();
-  
-  const [product, setProduct] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [added, setAdded] = useState(false);
-  
-  // အရေအတွက် (Quantity) ကို မှတ်သားမည့် State အသစ်
+  const router = useRouter();
+  const { t } = useT();
+  const { addItem } = useCart();
+  const { data, loading } = useCatalog();
+
+  const [selectedId, setSelectedId] = useState(String(params?.id ?? ""));
   const [quantity, setQuantity] = useState(1);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [prefilled, setPrefilled] = useState(false);
+  const [missing, setMissing] = useState<string | null>(null);
 
+  const product = data?.products.find((p) => String(p.id) === selectedId);
+  const packages = useMemo(() => {
+    if (!data || !product) return [];
+    const family = productFamily(product);
+    return data.products
+      .filter((p) => productFamily(p) === family)
+      .sort((a, b) => Number(a.price) - Number(b.price));
+  }, [data, product]);
+
+  const fields: string[] = Array.isArray(product?.required_fields) ? product.required_fields : [];
+
+  // Fill Player ID etc. from the last order on this device.
   useEffect(() => {
-    if (id) fetchProduct();
-  }, [id]);
-
-  const fetchProduct = async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase.from("products").select("*").eq("id", id).single();
-    if (data) setProduct(data);
-    setLoading(false);
-  };
-
-  // အတိုး/အလျှော့ ခလုတ်များအတွက် Functions
-  const increaseQuantity = () => setQuantity(prev => prev + 1);
-  const decreaseQuantity = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
-
-  const handleAddToCart = () => {
-    if (product) {
-      // Cart ထဲသို့ Quantity ပါ တစ်ခါတည်း ပို့ပေးပါမည်
-      dispatch({ type: "ADD_TO_CART", payload: { ...product, quantity: quantity } });
-      setAdded(true);
-      setTimeout(() => setAdded(false), 2000);
+    if (fields.length === 0) return;
+    const saved = rememberedFields();
+    const fill: Record<string, string> = {};
+    for (const f of fields) if (saved[f] && !values[f]) fill[f] = saved[f];
+    if (Object.keys(fill).length) {
+      setValues((v) => ({ ...fill, ...v }));
+      setPrefilled(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields.join("|")]);
+
+  if (loading) {
+    return (
+      <div className="container-page animate-pulse space-y-4 py-6">
+        <div className="h-24 rounded-2xl bg-surface" />
+        <div className="h-40 rounded-2xl bg-surface" />
+        <div className="h-56 rounded-2xl bg-surface" />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="container-page flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
+        <h1 className="font-display text-2xl font-bold">{t("product.notFound")}</h1>
+        <Link href="/" className="btn-primary">{t("product.backShop")}</Link>
+      </div>
+    );
+  }
+
+  const days = Number(product.subscription_days) || 0;
+  const total = Number(product.price) * quantity;
+
+  const choose = (id: string) => {
+    setSelectedId(id);
+    setQuantity(1);
+    router.replace(`/products/${id}`, { scroll: false });
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-indigo-400 font-bold text-2xl animate-pulse">Loading Product...</div>;
-  if (!product) return <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-white space-y-4"><h1 className="text-4xl font-bold text-red-500">404 - Product Not Found</h1><Link href="/products" className="text-indigo-400 underline">Go back to shop</Link></div>;
+  const validate = () => {
+    for (const f of fields) {
+      if (!values[f]?.trim()) {
+        setMissing(f);
+        document.getElementById(`field-${fields.indexOf(f)}`)?.focus();
+        return false;
+      }
+    }
+    setMissing(null);
+    return true;
+  };
+
+  const add = (goCheckout: boolean) => {
+    if (!validate()) return;
+    const clean: Record<string, string> = {};
+    for (const f of fields) clean[f] = values[f].trim();
+    if (fields.length) rememberFields(clean);
+    addItem(product, quantity, fields.length ? clean : undefined);
+    if (goCheckout) router.push("/checkout");
+  };
+
+  let step = 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-32 pb-20 px-6 relative overflow-hidden">
-      {/* Background Glow Effect */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[150px] pointer-events-none"></div>
+    <div className="container-page pb-44 pt-4 sm:pt-8 lg:pb-16">
+      <Link href={`/?cat=${encodeURIComponent(categoryKey(product.product_type))}`} className="mb-4 inline-flex items-center gap-2 text-sm text-muted hover:text-text">
+        <ArrowLeftIcon size={16} /> {product.product_type || t("nav.shop")}
+      </Link>
 
-      <div className="max-w-6xl mx-auto relative z-10">
-        <Link href="/products" className="text-gray-400 hover:text-white mb-10 inline-block font-medium tracking-wide transition-colors">
-          ← Back to Shop
-        </Link>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
-          
-          {/* ဘယ်ဘက် - Product ပုံ */}
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl shadow-indigo-500/10">
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-black/40 border border-white/5">
-              <img src={product.image} alt={product.name} className="object-cover w-full h-full transform hover:scale-105 transition-transform duration-700" />
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-4">
+          {/* Product header */}
+          <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-4">
+            <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-raised sm:h-24 sm:w-24">
+              <ProductArt product={product} />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <h1 className="font-display text-xl font-bold leading-tight sm:text-2xl">{product.name}</h1>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                {product.product_type && <span className="badge bg-brand/15 text-brand">{product.product_type}</span>}
+                {days > 0 && <span className="inline-flex items-center gap-1"><ClockIcon size={14} /> {t("product.access", { n: days })}</span>}
+              </div>
             </div>
           </div>
-          
-          {/* ညာဘက် - Product အသေးစိတ်နှင့် Quantity */}
-          <div className="space-y-8 pt-6">
-            <div className="inline-block px-4 py-1.5 bg-indigo-500/20 text-indigo-400 text-sm font-bold rounded-full uppercase tracking-wider border border-indigo-500/30">
-              {product.product_type || "Digital Asset"}
-            </div>
-            
-            <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter leading-tight">{product.name}</h1>
-            <p className="text-4xl font-black text-emerald-400">${product.price}</p>
-            <p className="text-gray-300 text-lg leading-relaxed whitespace-pre-wrap">{product.description}</p>
-            
-            {/* Quantity Selector UI */}
-            <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-              
-              <div>
-                <label className="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-2">Quantity</label>
-                <div className="flex items-center bg-black/50 border border-white/10 rounded-xl overflow-hidden w-fit">
-                  <button onClick={decreaseQuantity} className="px-5 py-3 text-gray-400 hover:text-white hover:bg-white/10 transition-colors font-bold text-lg">
-                    −
-                  </button>
-                  <span className="px-6 py-3 font-bold text-lg w-16 text-center border-x border-white/10">
-                    {quantity}
-                  </span>
-                  <button onClick={increaseQuantity} className="px-5 py-3 text-gray-400 hover:text-white hover:bg-white/10 transition-colors font-bold text-lg">
-                    +
-                  </button>
-                </div>
-              </div>
 
-              {/* Subtotal Calculation */}
-              <div className="bg-white/5 px-6 py-3.5 rounded-xl border border-white/10">
-                <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Subtotal</p>
-                <p className="text-xl font-bold text-emerald-400">
-                  ${(product.price * quantity).toFixed(2)}
-                </p>
+          {/* 1. Account details (Player ID, etc.) */}
+          <Step n={++step} title={t("product.step1")}>
+            {fields.length === 0 ? (
+              <p className="my text-sm text-muted">{t("product.noFields")}</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {fields.map((f, i) => (
+                  <div key={f}>
+                    <label htmlFor={`field-${i}`} className="label">{f}</label>
+                    <input
+                      id={`field-${i}`}
+                      value={values[f] || ""}
+                      onChange={(e) => { setValues({ ...values, [f]: e.target.value }); if (missing === f) setMissing(null); }}
+                      className={`field ${missing === f ? "border-danger ring-2 ring-danger/25" : ""}`}
+                      maxLength={500}
+                      autoComplete="off"
+                      aria-invalid={missing === f}
+                    />
+                    {missing === f && <p className="mt-1 text-xs text-danger" role="alert">{t("product.fillFields", { field: f })}</p>}
+                  </div>
+                ))}
+                {prefilled && <p className="my text-xs text-mint sm:col-span-2">✓ {t("product.remembered")}</p>}
               </div>
+            )}
+          </Step>
 
-            </div>
-            
-            {/* Add to Cart Button */}
-            <div className="pt-2">
-              <button 
-                onClick={handleAddToCart} 
-                className={`w-full px-12 py-5 rounded-2xl font-extrabold text-lg transition-all shadow-2xl flex items-center justify-center gap-3 ${
-                  added 
-                  ? 'bg-emerald-500 text-white shadow-emerald-500/50' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/50'
-                }`}
-              >
-                {added ? (
-                  <><span>✓</span> Added {quantity} to Cart</>
-                ) : (
-                  <><span>🛒</span> Add to Cart</>
-                )}
+          {/* 2. Package */}
+          {packages.length > 1 && (
+            <Step n={++step} title={t("product.step2")}>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3" role="radiogroup" aria-label={t("product.step2")}>
+                {packages.map((p) => {
+                  const on = String(p.id) === selectedId;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => choose(String(p.id))}
+                      className={`relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-colors ${
+                        on ? "border-brand bg-brand/10" : "border-line bg-raised hover:border-muted/50"
+                      }`}
+                    >
+                      {on && (
+                        <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-white">
+                          <CheckIcon size={12} />
+                        </span>
+                      )}
+                      <span className="line-clamp-2 pr-5 text-sm font-medium leading-snug">{p.name}</span>
+                      <span className="price text-sm">{formatPrice(p.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Step>
+          )}
+
+          {/* 3. Quantity */}
+          <Step n={++step} title={t("product.step3")}>
+            <div className="inline-flex items-center rounded-xl border border-line bg-raised">
+              <button type="button" className="grid h-11 w-11 place-items-center text-muted hover:text-text disabled:opacity-40" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label="−">
+                <MinusIcon size={16} />
+              </button>
+              <span className="min-w-10 text-center font-semibold tabular-nums" aria-live="polite">{quantity}</span>
+              <button type="button" className="grid h-11 w-11 place-items-center text-muted hover:text-text disabled:opacity-40" onClick={() => setQuantity((q) => Math.min(99, q + 1))} disabled={quantity >= 99} aria-label="+">
+                <PlusIcon size={16} />
               </button>
             </div>
-            
+          </Step>
+
+          {(
+            <section className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+              <h2 className="mb-3 font-semibold">{t("product.about")}</h2>
+              {product.description && <p className="my mb-4 whitespace-pre-wrap text-sm leading-relaxed text-muted">{product.description}</p>}
+              <ul className="space-y-2 text-sm">
+                <li className="my flex items-center gap-2"><KeyIcon size={16} className="text-brand" /> {t("product.delivery")}</li>
+                <li className="my flex items-center gap-2"><ShieldIcon size={16} className="text-brand" /> {t("product.checked")}</li>
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {/* Desktop summary */}
+        <aside className="hidden space-y-4 rounded-2xl border border-line bg-surface p-5 lg:sticky lg:top-24 lg:block">
+          <p className="text-sm text-muted">{product.name} × {quantity}</p>
+          <div className="flex items-baseline justify-between">
+            <span className="font-semibold">{t("product.total")}</span>
+            <span className="price text-3xl">{formatPrice(total)}</span>
           </div>
+          <button type="button" onClick={() => add(true)} className="btn-primary btn-lg w-full">{t("product.buyNow")}</button>
+          <button type="button" onClick={() => add(false)} className="btn-ghost w-full">
+            <BagIcon size={18} /> {t("product.addToCart")}
+          </button>
+        </aside>
+      </div>
+
+      {/* Phone: action bar above the tab bar */}
+      <div className="fixed inset-x-0 bottom-[calc(4.4rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-ink/95 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-6xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted">{t("product.total")}</p>
+            <p className="price text-xl leading-tight">{formatPrice(total)}</p>
+          </div>
+          <button type="button" onClick={() => add(false)} className="btn-ghost h-12 w-12 p-0" aria-label={t("product.addToCart")}>
+            <BagIcon size={20} />
+          </button>
+          <button type="button" onClick={() => add(true)} className="btn-primary h-12 px-6">{t("product.buyNow")}</button>
         </div>
       </div>
     </div>

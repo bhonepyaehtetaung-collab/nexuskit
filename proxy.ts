@@ -1,50 +1,66 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-// 👈 ဒီနေရာမှာ function နာမည်ကို 'proxy' လို့ ပြောင်းထားပါတယ်
+/**
+ * Runs before every /admin request.
+ * - Not signed in            → /admin/login
+ * - Signed in but not staff  → /admin/login?error=not-staff
+ * The database (RLS) enforces the same rules again, so even someone who
+ * bypasses this page check still cannot read or change admin data.
+ */
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
+  let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) { return request.cookies.get(name)?.value },
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options })
-          response = NextResponse.next({ request: { headers: request.headers } })
-          response.cookies.set({ name, value, ...options })
+          request.cookies.set({ name, value, ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: '', ...options })
-          response = NextResponse.next({ request: { headers: request.headers } })
-          response.cookies.set({ name, value: '', ...options })
+          request.cookies.set({ name, value: "", ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value: "", ...options });
         },
       },
-    }
-  )
+    },
+  );
 
-  // အကောင့်ဝင်ထားခြင်း ရှိ/မရှိ စစ်ဆေးခြင်း
-  const { data: { user } } = await supabase.auth.getUser()
+  const path = request.nextUrl.pathname;
+  const isLoginPage = path === "/admin/login";
 
-  // /admin ကို ဝင်လာသူသည် Login ဝင်မထားပါက /admin/login သို့ မောင်းထုတ်မည်
-  if (request.nextUrl.pathname.startsWith('/admin') && !request.nextUrl.pathname.startsWith('/admin/login')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
-    }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let role: string | null = null;
+  if (user) {
+    const { data } = await supabase.rpc("staff_role");
+    role = typeof data === "string" ? data : null;
   }
 
-  // Login ဝင်ထားပြီးသားသူက /admin/login ကို ထပ်ဝင်လာပါက Dashboard သို့ ပို့မည်
-  if (request.nextUrl.pathname === '/admin/login' && user) {
-    return NextResponse.redirect(new URL('/admin', request.url))
+  if (!isLoginPage && !role) {
+    const url = new URL("/admin/login", request.url);
+    if (user) url.searchParams.set("error", "not-staff");
+    return NextResponse.redirect(url);
   }
 
-  return response
+  if (isLoginPage && role) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return response;
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
-}
+  matcher: ["/admin/:path*"],
+};

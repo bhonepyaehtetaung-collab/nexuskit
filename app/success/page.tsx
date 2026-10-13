@@ -3,59 +3,47 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useT } from "@/lib/i18n";
+import { CheckIcon } from "../components/icons";
 
 function SuccessContent() {
-  const searchParams = useSearchParams();
-  const type = searchParams.get("type");
-  
-  // URL မှာ ?type=pay-later ပါလာရင် true ဖြစ်မည်
-  const isPayLater = type === "pay-later"; 
+  const params = useSearchParams();
+  const { t } = useT();
+  const isPayLater = params.get("type") === "pay-later";
+  const orderCode = (params.get("order") || "").replace(/[^a-zA-Z0-9-]/g, "").slice(0, 12);
+
+  const steps = isPayLater ? [t("ok.s1"), t("ok.l2"), t("ok.l3")] : [t("ok.s1"), t("ok.s2"), t("ok.s3")];
 
   return (
-    <div className="bg-white/5 border border-white/10 p-8 sm:p-12 rounded-[2rem] sm:rounded-[3rem] shadow-2xl max-w-lg w-full text-center relative overflow-hidden animate-in zoom-in-95 duration-500">
-      
-      {/* Background Glow Effect */}
-      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 blur-[60px] rounded-full ${isPayLater ? 'bg-emerald-500/30' : 'bg-indigo-500/30'}`}></div>
-
-      <div className="relative z-10">
-        <div className={`w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full flex items-center justify-center mb-6 sm:mb-8 text-4xl sm:text-5xl shadow-lg border-4 ${
-          isPayLater 
-            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
-            : "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
-        }`}>
-          {isPayLater ? "🤝" : "✅"}
+    <div className="pass w-full max-w-md animate-slide-up">
+      <div className="space-y-4 p-6 text-center sm:p-8">
+        <div className={`mx-auto grid h-16 w-16 place-items-center rounded-full ${isPayLater ? "bg-mint/15 text-mint" : "bg-brand/15 text-brand"}`}>
+          <CheckIcon size={32} />
         </div>
+        <h1 className="my font-display text-2xl font-bold sm:text-3xl">{isPayLater ? t("ok.setup") : t("ok.placed")}</h1>
+        {orderCode && (
+          <p className="text-sm text-muted">
+            {t("ok.order")} <span className="font-semibold text-text">#{orderCode}</span>
+          </p>
+        )}
+      </div>
 
-        <h1 className="text-2xl sm:text-3xl font-black text-white mb-4">
-          {isPayLater ? "တောင်းဆိုမှု အောင်မြင်ပါသည်" : "အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်"}
-        </h1>
-        
-        <p className="text-sm sm:text-base text-gray-400 leading-relaxed mb-8">
-          {isPayLater ? (
-            <>
-              သင့်ရဲ့ <strong className="text-emerald-400">"ဝန်ဆောင်မှုအရင်ရယူမည်"</strong> တောင်းဆိုလွှာကို လက်ခံရရှိပါပြီ။ <br/>
-              ကျွန်ုပ်တို့မှ စတင် Setup လုပ်ဆောင်ပေးနေပြီဖြစ်ပြီး၊ အချက်အလက်များကို သင့်ရဲ့ My Account တွင် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
-            </>
-          ) : (
-            <>
-              သင့်ရဲ့ အော်ဒါနဲ့ ငွေပေးချေမှု မှတ်တမ်းကို လက်ခံရရှိပါပြီ။ <br/>
-              အချက်အလက်များကို စစ်ဆေးပြီးပါက ဝယ်ယူထားသော Digital Assets / Credentials များကို Telegram မှတစ်ဆင့် အမြန်ဆုံး ပေးပို့သွားပါမည်။
-            </>
-          )}
-        </p>
+      <div className="pass-tear" />
 
-        <div className="bg-black/40 p-4 sm:p-5 rounded-2xl border border-white/5 mb-8 text-left">
-           <p className="text-xs sm:text-sm text-gray-300 flex items-start gap-3">
-             <span className="text-lg">💡</span>
-             <span>ယခု Page ကို ပိတ်နိုင်ပါပြီ။ အော်ဒါအခြေအနေကို Telegram မှတစ်ဆင့် အချိန်မရွေး စုံစမ်းမေးမြန်းနိုင်ပါသည်။</span>
-           </p>
-        </div>
+      <ol className="space-y-4 p-6 sm:p-8">
+        {steps.map((text, i) => (
+          <li key={i} className="flex gap-3">
+            <span className={`grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-xs font-bold ${i === 0 ? "bg-mint text-ink" : "bg-raised text-muted"}`}>
+              {i === 0 ? <CheckIcon size={14} /> : i + 1}
+            </span>
+            <span className={`my text-sm ${i === 0 ? "text-text" : "text-muted"}`}>{text}</span>
+          </li>
+        ))}
+      </ol>
 
-        <Link href="/" className={`inline-block w-full sm:w-auto px-8 py-4 rounded-xl font-bold shadow-lg transition-all active:scale-95 ${
-          isPayLater ? "bg-emerald-600 hover:bg-emerald-500" : "bg-indigo-600 hover:bg-indigo-500"
-        }`}>
-          ပင်မစာမျက်နှာသို့ ပြန်သွားမည်
-        </Link>
+      <div className="grid gap-3 px-6 pb-6 sm:px-8 sm:pb-8">
+        <Link href="/my-account" className="btn-primary btn-lg">{t("ok.goAccount")}</Link>
+        <Link href="/" className="btn-quiet">{t("ok.keep")}</Link>
       </div>
     </div>
   );
@@ -63,9 +51,8 @@ function SuccessContent() {
 
 export default function SuccessPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
-      {/* Suspense is required for useSearchParams in Next.js App Router */}
-      <Suspense fallback={<div className="text-white font-bold animate-pulse">Loading status...</div>}>
+    <div className="container-page flex flex-1 items-center justify-center py-12">
+      <Suspense fallback={<div className="h-96 w-full max-w-md animate-pulse rounded-pass bg-surface" />}>
         <SuccessContent />
       </Suspense>
     </div>
