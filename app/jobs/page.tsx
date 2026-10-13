@@ -8,15 +8,6 @@ export const metadata = { title: "Job Board" };
 
 const KINDS = ["hiring", "offering"] as const;
 
-/** Turn "@name", "t.me/name" or a phone number into a safe link. */
-function contactHref(contact: string): string | null {
-  const c = contact.trim();
-  const tg = c.match(/^(?:@|(?:https?:\/\/)?t\.me\/)([A-Za-z0-9_]{4,32})$/);
-  if (tg) return `https://t.me/${tg[1]}`;
-  if (/^\+?[0-9][0-9\s-]{6,18}$/.test(c)) return `tel:${c.replace(/[\s-]/g, "")}`;
-  return null;
-}
-
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   const { kind } = await searchParams;
   const active = KINDS.includes(kind as any) ? kind : null;
@@ -67,28 +58,23 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {jobs.map((j) => {
-            const href = contactHref(j.contact);
-            return (
-              <li key={j.id} className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className={`badge ${j.kind === "hiring" ? "bg-info/15 text-info" : "bg-mint/15 text-mint"}`}>{t(`jobs.${j.kind}` as TKey)}</span>
-                  {j.category && <span className="badge bg-raised text-muted">{j.category}</span>}
-                  <span className="ml-auto text-muted">{ago(j.created_at)}</span>
-                </div>
-                <h2 className="my text-lg font-semibold leading-snug">{j.title}</h2>
-                <p className="my line-clamp-4 whitespace-pre-line text-sm text-muted">{j.description}</p>
-                <div className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-3">
-                  <span className="text-sm">{j.budget ? <><span className="text-muted">{t("jobs.budget")}: </span><span className="price">{j.budget}</span></> : null}</span>
-                  {href ? (
-                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="btn-ghost px-4 py-2">{t("jobs.contact")}</a>
-                  ) : (
-                    <span className="truncate text-sm text-muted">{j.contact}</span>
-                  )}
-                </div>
+          {jobs.map((j) => (
+              <li key={j.id}>
+                <Link href={`/jobs/${j.id}`} className="group flex h-full flex-col gap-3 rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-brand/50">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className={`badge ${j.kind === "hiring" ? "bg-info/15 text-info" : "bg-mint/15 text-mint"}`}>{t(`jobs.${j.kind}` as TKey)}</span>
+                    {j.category && <span className="badge max-w-[60%] truncate bg-raised text-muted">{j.category}</span>}
+                    <span className="ml-auto text-muted">{ago(j.created_at)}</span>
+                  </div>
+                  <h2 className="my break-words text-lg font-semibold leading-snug group-hover:text-brand">{j.title}</h2>
+                  <p className="my line-clamp-3 whitespace-pre-line break-words text-sm text-muted">{j.description}</p>
+                  <div className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-3">
+                    <span className="min-w-0 truncate text-sm">{j.budget ? <><span className="text-muted">{t("jobs.budget")}: </span><span className="price">{j.budget}</span></> : null}</span>
+                    <span className="my flex-shrink-0 text-sm font-medium text-brand">{t("jobs.readMore")} →</span>
+                  </div>
+                </Link>
               </li>
-            );
-          })}
+          ))}
         </ul>
       )}
     </div>

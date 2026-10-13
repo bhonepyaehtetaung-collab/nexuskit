@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useCart } from "@/app/context/cartContext";
 import { useT } from "@/lib/i18n";
+import SocialLogin from "../components/SocialLogin";
 import { daysUntil, formatPrice, STATUS_TONE } from "@/lib/format";
 import { ProductArt } from "../components/ProductCard";
 import { findRenewals } from "@/lib/renewals";
@@ -312,6 +313,8 @@ function LoginCard() {
             </div>
           </div>
         ) : (
+          <>
+          <SocialLogin next="/my-account" />
           <form onSubmit={(e) => { e.preventDefault(); send(); }} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="label">{t("co.email")}</label>
@@ -322,6 +325,7 @@ function LoginCard() {
               {sending ? t("acc.sending") : t("acc.sendLink")}
             </button>
           </form>
+          </>
         )}
       </div>
     </div>

@@ -46,7 +46,6 @@ export default function Footer() {
         <nav aria-label="Footer">
           <h2 className="my mb-3 text-sm font-semibold">{t("footer.store")}</h2>
           <ul className="my space-y-2 text-sm text-muted">
-            <li><Link href="/" className="hover:text-text">{t("nav.store")}</Link></li>
             <li><Link href="/hub" className="hover:text-text">{t("nav.hub")}</Link></li>
             <li><Link href="/jobs" className="hover:text-text">{t("nav.jobs")}</Link></li>
             <li><Link href="/my-account" className="hover:text-text">{t("nav.myAccount")}</Link></li>

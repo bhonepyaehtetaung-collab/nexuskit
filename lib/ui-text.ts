@@ -32,6 +32,10 @@ export const EDITABLE_TEXT: { group: { my: string; en: string }; items: { key: T
       { key: "store.bundles", label: { my: "Toolkit ခေါင်းစဉ်", en: "Toolkits heading" } },
       { key: "store.products", label: { my: "Product အားလုံး ခေါင်းစဉ်", en: "All products heading" } },
       { key: "home.howTitle", label: { my: "ဝယ်ယူပုံ ခေါင်းစဉ်", en: "How-it-works heading" } },
+      { key: "home.step1", label: { my: "ဝယ်ယူပုံ — အဆင့် ၁", en: "How it works — step 1" } },
+      { key: "home.step2", label: { my: "ဝယ်ယူပုံ — အဆင့် ၂", en: "How it works — step 2" } },
+      { key: "home.step3", label: { my: "ဝယ်ယူပုံ — အဆင့် ၃", en: "How it works — step 3" } },
+      { key: "home.weAccept", label: { my: "\"လက်ခံသော ငွေပေးချေမှု\" စာ", en: "\"We accept\" label" } },
     ],
   },
   {

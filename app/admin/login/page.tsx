@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { LockIcon, MailIcon } from "@/app/components/icons";
+import SocialLogin from "@/app/components/SocialLogin";
 
 function AdminLoginForm() {
   const router = useRouter();
@@ -87,6 +88,8 @@ function AdminLoginForm() {
         </div>
 
         {error && <p className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">{error}</p>}
+
+        <SocialLogin next="/admin/login" divider={false} />
 
         {mode === "link" && sent ? (
           <div className="flex gap-3 rounded-xl border border-mint/30 bg-mint/5 p-4 text-sm">
