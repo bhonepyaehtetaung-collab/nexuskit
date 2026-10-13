@@ -65,18 +65,21 @@ async function callClaude(body: Record<string, unknown>): Promise<any> {
   }
 }
 
-/** Runs one forced tool call and returns its input. */
-async function structured<T>(system: string, content: any[], tool: { name: string; description: string; input_schema: any }, maxTokens = 4000): Promise<T> {
+/** Asks for JSON that matches `schema` (structured outputs) and parses it. */
+async function structured<T>(system: string, content: any[], schema: Record<string, unknown>, maxTokens = 4000): Promise<T> {
   const res = await callClaude({
     max_tokens: maxTokens,
     system,
-    tools: [tool],
-    tool_choice: { type: "tool", name: tool.name },
+    output_config: { format: { type: "json_schema", schema } },
     messages: [{ role: "user", content }],
   });
-  const block = (res.content || []).find((b: any) => b.type === "tool_use" && b.name === tool.name);
-  if (!block) throw new Error("AI returned no result");
-  return block.input as T;
+  if (res.stop_reason === "max_tokens") throw new Error("AI answer was too long — try a shorter list");
+  const text = (res.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("AI returned an unreadable answer — please try again");
+  }
 }
 
 function userContent(text: string, images: AiImage[] = []) {
@@ -124,32 +127,30 @@ export async function extractProducts(opts: {
   ].join("\n");
 
   const out = await structured<{ items: any[] }>(system, userContent(opts.text, opts.images), {
-    name: "save_products",
-    description: "Save the extracted product listings.",
-    input_schema: {
-      type: "object",
-      properties: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        description: "At most 40 items.",
         items: {
-          type: "array",
-          maxItems: 40,
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              cost: { type: ["number", "null"] },
-              currency: { type: "string" },
-              category: { type: "string" },
-              subscription_days: { type: "integer" },
-              required_fields: { type: "array", items: { type: "string" } },
-              description: { type: "string" },
-              note: { type: "string" },
-            },
-            required: ["name", "cost", "currency", "category", "subscription_days", "required_fields", "description", "note"],
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            cost: { anyOf: [{ type: "number" }, { type: "null" }] },
+            currency: { type: "string" },
+            category: { type: "string" },
+            subscription_days: { type: "integer" },
+            required_fields: { type: "array", items: { type: "string" } },
+            description: { type: "string" },
+            note: { type: "string" },
           },
+          required: ["name", "cost", "currency", "category", "subscription_days", "required_fields", "description", "note"],
+          additionalProperties: false,
         },
       },
-      required: ["items"],
     },
+    required: ["items"],
+    additionalProperties: false,
   }, 8000);
 
   return (Array.isArray(out?.items) ? out.items : []).slice(0, 40).flatMap((it: any): ProductDraft[] => {
@@ -189,21 +190,18 @@ export async function draftJob(opts: { text: string; images?: AiImage[] }): Prom
     "note: in Burmese, list anything missing that the owner should add (e.g. contact). Empty if complete.",
   ].join("\n");
   const j = await structured<any>(system, userContent(opts.text, opts.images), {
-    name: "save_job",
-    description: "Save the job post draft.",
-    input_schema: {
-      type: "object",
-      properties: {
-        kind: { type: "string", enum: ["hiring", "offering"] },
-        title: { type: "string" },
-        description: { type: "string" },
-        category: { type: "string" },
-        budget: { type: "string" },
-        contact: { type: "string" },
-        note: { type: "string" },
-      },
-      required: ["kind", "title", "description", "category", "budget", "contact", "note"],
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: ["hiring", "offering"] },
+      title: { type: "string" },
+      description: { type: "string" },
+      category: { type: "string" },
+      budget: { type: "string" },
+      contact: { type: "string" },
+      note: { type: "string" },
     },
+    required: ["kind", "title", "description", "category", "budget", "contact", "note"],
+    additionalProperties: false,
   });
   return {
     kind: j?.kind === "offering" ? "offering" : "hiring",
@@ -243,7 +241,6 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
         properties: {
           posts: {
             type: "array",
-            maxItems: count,
             items: {
               type: "object",
               properties: {
