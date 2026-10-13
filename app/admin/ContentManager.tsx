@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { formatPrice } from "@/lib/format";
-import { bustStoreCache, useAdminUi } from "./ui";
+import { bustStoreCache, Sheet, useAdminUi } from "./ui";
+import { useT } from "@/lib/i18n";
 
 /* ------------------------------------------------------------------ */
 /* Shared helpers                                                      */
@@ -361,6 +362,87 @@ function BundleManager({ products }: { products: any[] }) {
 /* Job moderation                                                      */
 /* ------------------------------------------------------------------ */
 
+type JobForm = { id?: string; kind: "hiring" | "offering"; title: string; description: string; category: string; budget: string; contact: string };
+const emptyJob: JobForm = { kind: "hiring", title: "", description: "", category: "", budget: "", contact: "" };
+
+/** Staff write or edit a job post directly (published at once, 30 days). */
+function JobEditor({ job, onClose, onSaved }: { job: JobForm; onClose: () => void; onSaved: () => void }) {
+  const { lang } = useT();
+  const L = (my: string, en: string) => (lang === "my" ? my : en);
+  const { toast } = useAdminUi();
+  const supabase = useMemo(() => createClient(), []);
+  const [f, setF] = useState<JobForm>(job);
+  const [busy, setBusy] = useState(false);
+  const set = <K extends keyof JobForm>(k: K, v: JobForm[K]) => setF((x) => ({ ...x, [k]: v }));
+
+  const problems = [
+    f.title.trim().length < 5 && L("ခေါင်းစဉ် အနည်းဆုံး စာလုံး ၅ လုံး", "Title needs at least 5 characters"),
+    f.description.trim().length < 20 && L("အသေးစိတ် အနည်းဆုံး စာလုံး ၂၀", "Description needs at least 20 characters"),
+    f.contact.trim().length < 3 && L("ဆက်သွယ်ရန် ထည့်ပါ", "Add a contact"),
+  ].filter(Boolean) as string[];
+
+  const save = async () => {
+    if (problems.length) return toast(problems[0], "error");
+    setBusy(true);
+    const data = { kind: f.kind, title: f.title.trim(), description: f.description.trim(), category: f.category.trim(), budget: f.budget.trim(), contact: f.contact.trim() };
+    let error: any = null;
+    if (f.id) {
+      ({ error } = await supabase.from("jobs").update({ ...data, category: data.category || null, budget: data.budget || null }).eq("id", f.id));
+    } else {
+      // Goes through the same safe path as AI drafts: saved as a draft, then published.
+      const ins = await supabase.from("ai_drafts").insert({ kind: "job", origin: "dashboard", data, note: "Written in admin" }).select("id").single();
+      error = ins.error;
+      if (!error) ({ error } = await supabase.rpc("publish_draft", { p_id: ins.data!.id, p_approve: true, p_data: data }));
+    }
+    setBusy(false);
+    if (error) return toast(error.message, "error");
+    toast(f.id ? L("✓ ပြင်ပြီးပါပြီ", "✓ Saved") : L("✓ Job Board မှာ တင်ပြီးပါပြီ (ရက် ၃၀)", "✓ Posted on the Job Board (30 days)"));
+    bustStoreCache();
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={f.id ? L("Job post ပြင်မယ်", "Edit job post") : L("Job post အသစ်", "New job post")}
+      footer={<button type="button" disabled={busy} onClick={save} className="btn-primary btn-lg w-full">{busy ? L("တင်နေသည်…", "Posting…") : f.id ? L("သိမ်းမယ်", "Save") : L("Job Board မှာ တင်မယ်", "Post to Job Board")}</button>}
+    >
+      <div className="grid grid-cols-2 gap-2">
+        {(["hiring", "offering"] as const).map((k) => (
+          <button key={k} type="button" className="chip justify-center" aria-pressed={f.kind === k} onClick={() => set("kind", k)}>
+            {k === "hiring" ? L("လူရှာနေတယ် (Hiring)", "Hiring") : L("အလုပ်ရှာနေတယ် (Offering)", "Offering services")}
+          </button>
+        ))}
+      </div>
+      <div>
+        <label className="label my" htmlFor="jt">{L("ခေါင်းစဉ်", "Title")}</label>
+        <input id="jt" className="field" value={f.title} maxLength={120} onChange={(e) => set("title", e.target.value)} placeholder={L("ဥပမာ: Canva နဲ့ FB post ၁၀ ခု ဆွဲပေးမယ့်သူ", "e.g. Canva designer for 10 Facebook posts")} />
+      </div>
+      <div>
+        <label className="label my" htmlFor="jd">{L("အသေးစိတ်", "Description")}</label>
+        <textarea id="jd" className="field my" rows={7} value={f.description} maxLength={3000} onChange={(e) => set("description", e.target.value)} placeholder={L("ဘာလုပ်ရမလဲ၊ ဘယ်တော့လိုလဲ၊ ဘယ်လို skill လိုလဲ…", "What, by when, which skills…")} />
+        <p className="hint text-right">{f.description.length}/3000</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label my" htmlFor="jc">{L("အမျိုးအစား", "Category")}</label>
+          <input id="jc" className="field" value={f.category} maxLength={60} onChange={(e) => set("category", e.target.value)} placeholder="Design, Video, Marketing…" />
+        </div>
+        <div>
+          <label className="label my" htmlFor="jb">{L("ဘတ်ဂျက် / လစာ", "Budget")}</label>
+          <input id="jb" className="field" value={f.budget} maxLength={60} onChange={(e) => set("budget", e.target.value)} placeholder="100,000 Ks" />
+        </div>
+      </div>
+      <div>
+        <label className="label my" htmlFor="jk">{L("ဆက်သွယ်ရန်", "Contact")}</label>
+        <input id="jk" className="field" value={f.contact} maxLength={120} onChange={(e) => set("contact", e.target.value)} placeholder="@telegram, 09…, email" />
+      </div>
+    </Sheet>
+  );
+}
+
 function JobModeration() {
   const { toast, confirm: ask } = useAdminUi();
   const alert = (m: string) => toast(m, "error");
@@ -368,6 +450,7 @@ function JobModeration() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [missing, setMissing] = useState(false);
   const [status, setStatus] = useState("pending");
+  const [editing, setEditing] = useState<JobForm | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("jobs").select("*").eq("status", status).order("created_at", { ascending: false }).limit(200);
@@ -388,6 +471,8 @@ function JobModeration() {
   if (missing) return <SetupNeeded />;
   return (
     <div className="space-y-4">
+      <button type="button" className="btn-primary" onClick={() => setEditing({ ...emptyJob })}>+ New job post</button>
+      {editing && <JobEditor job={editing} onClose={() => setEditing(null)} onSaved={() => { setStatus("approved"); load(); }} />}
       <div className="flex flex-wrap gap-2">
         {["pending", "approved", "rejected", "closed"].map((s) => (
           <button key={s} type="button" className="chip capitalize" aria-pressed={status === s} onClick={() => setStatus(s)}>{s === "pending" ? "Waiting for review" : s}</button>
@@ -413,6 +498,7 @@ function JobModeration() {
               {j.status !== "approved" && <button type="button" className="btn bg-mint px-4 py-2 text-ink hover:bg-mint/90" onClick={() => setJobStatus(j.id, "approved")}>Approve (30 days)</button>}
               {j.status === "pending" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "rejected")}>Reject</button>}
               {j.status === "approved" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "closed")}>Close</button>}
+              <button type="button" className="btn-ghost px-4 py-2" onClick={() => setEditing({ id: j.id, kind: j.kind, title: j.title || "", description: j.description || "", category: j.category || "", budget: j.budget || "", contact: j.contact || "" })}>Edit</button>
               <button type="button" className="btn-quiet px-4 py-2 text-danger" onClick={async () => { if (await ask("Delete this post?")) { await supabase.from("jobs").delete().eq("id", j.id); bustStoreCache(); load(); } }}>Delete</button>
             </div>
           </li>
