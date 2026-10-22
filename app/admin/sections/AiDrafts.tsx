@@ -212,7 +212,7 @@ type Daily = { news: boolean; jobs: boolean; count: number };
 
 function DailyCard({ data, role, L, onDone }: { data: AdminData; role: Role; L: (my: string, en: string) => string; onDone: () => Promise<void> }) {
   const { toast } = useAdminUi();
-  const saved: Daily = { news: data.settings?.ai_daily?.news !== false, jobs: data.settings?.ai_daily?.jobs !== false, count: Number(data.settings?.ai_daily?.count) || 5 };
+  const saved: Daily = { news: data.settings?.ai_daily?.news !== false, jobs: data.settings?.ai_daily?.jobs !== false, count: Number(data.settings?.ai_daily?.count) || 3 };
   const [running, setRunning] = useState(false);
   const [last, setLast] = useState<any[]>([]);
   const canEdit = role === "super_admin";
@@ -284,7 +284,7 @@ function DailyCard({ data, role, L, onDone }: { data: AdminData; role: Role; L: 
           <label className="chip gap-2 py-1 pr-1.5">
             <span className="my">{L("တစ်မျိုးလျှင်", "Each")}</span>
             <select disabled={!canEdit} value={saved.count} onChange={(e) => save({ ...saved, count: Number(e.target.value) })} className="rounded-lg bg-raised px-2 py-1 text-text">
-              {[3, 4, 5, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
         </div>

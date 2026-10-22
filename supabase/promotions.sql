@@ -330,7 +330,7 @@ grant  execute on function public.create_order(text, text, text, jsonb, jsonb, t
 -- 5. Daily AI drafts (5 news + 5 real job openings, approved on Telegram)
 -- ---------------------------------------------------------------------
 alter table public.site_settings add column if not exists ai_daily jsonb
-  not null default '{"news": true, "jobs": true, "count": 5}'::jsonb;
+  not null default '{"news": true, "jobs": true, "count": 3}'::jsonb;
 
 alter table public.ai_jobs drop constraint if exists ai_jobs_kind_check;
 alter table public.ai_jobs add constraint ai_jobs_kind_check

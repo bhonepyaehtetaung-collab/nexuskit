@@ -10,7 +10,7 @@ export type JobKind = DraftKind | "cover";
 export type JobInput = {
   text?: string; topic?: string; images?: AiImage[]; notify?: boolean; tg_file_id?: string; tg_wait_id?: number; post_id?: string;
   /** Daily schedule: model override and how many drafts. */
-  model?: string; count?: number; daily?: boolean;
+  model?: string; count?: number; daily?: boolean; maxSearches?: number;
 };
 
 const JOB_HEADER = "x-nexuskit-job";
@@ -69,7 +69,7 @@ export async function runJob(db: SupabaseClient, id: string): Promise<void> {
       const img = await telegramImage(input.tg_file_id);
       if (img) images.push(img);
     }
-    const drafts = await createDrafts(db, { kind: job.kind, text: input.text || "", topic: input.topic, images, model: input.model, count: input.count }, job.origin);
+    const drafts = await createDrafts(db, { kind: job.kind, text: input.text || "", topic: input.topic, images, model: input.model, count: input.count, maxSearches: input.maxSearches }, job.origin);
     await db.from("ai_jobs").update({
       status: "done",
       draft_count: drafts.length,

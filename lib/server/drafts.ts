@@ -6,7 +6,7 @@ import { escapeHtml } from "./telegram";
 
 export type DraftKind = "products" | "job" | "jobs_web" | "news";
 /** `model`/`count` are set by the daily schedule (cheaper model, 5 each). */
-export type DraftInput = { kind: DraftKind; text?: string; images?: AiImage[]; topic?: string; model?: string; count?: number };
+export type DraftInput = { kind: DraftKind; text?: string; images?: AiImage[]; topic?: string; model?: string; count?: number; maxSearches?: number };
 export type Origin = "dashboard" | "telegram";
 
 const DEFAULT_RULES: PricingRules = { markup_percent: 20, round_to: 100 };
@@ -64,6 +64,7 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
     const found = await draftJobsFromWeb({
       count: input.count || 5,
       model: input.model,
+      maxSearches: input.maxSearches,
       focus: input.topic || text || undefined,
       existingTitles: [...(jobs.data || []).map((j: any) => j.title), ...(pending.data || []).map((d: any) => d.data?.title)].filter(Boolean),
     });
@@ -85,11 +86,13 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
       topic: input.topic || text,
       count: input.count,
       model: input.model,
+      maxSearches: input.maxSearches,
       products: Array.from(new Set((products.data || []).map((p: any) => String(p.name).split(/[ ,(—-]/)[0]))),
       existingTitles: [...(posts.data || []).map((p: any) => p.title), ...(pending.data || []).map((d: any) => d.data?.title)].filter(Boolean),
     });
     // Draw a cover for each post (in parallel). A failed picture never blocks the post.
-    const covers = await Promise.all(news.map((p) => makeCover(db, p).catch(() => null)));
+    // Daily runs draw covers with the cheaper daily model too.
+    const covers = await Promise.all(news.map((p) => makeCover(db, p, input.model).catch(() => null)));
     rows = news.map((p, i) => ({
       kind: "post",
       origin,
@@ -106,8 +109,8 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
 }
 
 /** Ask the AI for a cover picture, store it in the public products bucket, return its URL. */
-export async function makeCover(db: SupabaseClient, post: { title: string; excerpt?: string; tag?: string }): Promise<string> {
-  const svg = await draftCoverSvg(post);
+export async function makeCover(db: SupabaseClient, post: { title: string; excerpt?: string; tag?: string }, modelId?: string): Promise<string> {
+  const svg = await draftCoverSvg(post, modelId);
   const path = `covers/ai_${randomUUID()}.svg`;
   const { error } = await db.storage.from("products").upload(path, new Blob([svg], { type: "image/svg+xml" }), { contentType: "image/svg+xml", upsert: false });
   if (error) throw new Error(error.message);

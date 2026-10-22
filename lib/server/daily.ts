@@ -6,7 +6,9 @@ import { aiConfigured, dailyModel } from "./ai";
 import { createJob, queueJob } from "./jobs";
 
 export type DailySettings = { news: boolean; jobs: boolean; count: number };
-export const DAILY_DEFAULTS: DailySettings = { news: true, jobs: true, count: 5 };
+export const DAILY_DEFAULTS: DailySettings = { news: true, jobs: true, count: 3 };
+/** Web searches per daily run ($10 per 1,000 searches) — the main cost. */
+export const DAILY_MAX_SEARCHES = 3;
 
 export async function dailySettings(db: SupabaseClient): Promise<DailySettings> {
   const { data } = await db.from("site_settings").select("ai_daily").eq("id", 1).maybeSingle();
@@ -33,7 +35,7 @@ export async function startDaily(db: SupabaseClient, siteOrigin: string): Promis
   const kinds = [settings.news && "news", settings.jobs && "jobs_web"].filter(Boolean) as ("news" | "jobs_web")[];
   const started: string[] = [];
   for (const kind of kinds) {
-    const id = await createJob(db, kind, "dashboard", { daily: true, model: dailyModel(), count: settings.count }, "daily");
+    const id = await createJob(db, kind, "dashboard", { daily: true, model: dailyModel(), count: settings.count, maxSearches: DAILY_MAX_SEARCHES }, "daily");
     const queued = await queueJob(siteOrigin, id);
     if (!queued) await db.from("ai_jobs").update({ status: "error", error: "Background function could not start", finished_at: new Date().toISOString() }).eq("id", id);
     started.push(`${kind}:${queued ? "queued" : "failed"}`);

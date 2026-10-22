@@ -68,8 +68,9 @@ async function callClaude(body: Record<string, unknown>): Promise<any> {
 }
 
 /** Asks for JSON that matches `schema` (structured outputs) and parses it. */
-async function structured<T>(system: string, content: any[], schema: Record<string, unknown>, maxTokens = 4000): Promise<T> {
+async function structured<T>(system: string, content: any[], schema: Record<string, unknown>, maxTokens = 4000, modelId?: string): Promise<T> {
   const res = await callClaude({
+    ...(modelId ? { model: modelId } : {}),
     max_tokens: maxTokens,
     system,
     output_config: { format: { type: "json_schema", schema } },
@@ -220,7 +221,7 @@ export async function draftJob(opts: { text: string; images?: AiImage[] }): Prom
 /* Hub news: search the web, then write short Burmese posts            */
 /* ------------------------------------------------------------------ */
 
-export async function draftNews(opts: { topic?: string; products: string[]; existingTitles: string[]; count?: number; model?: string }): Promise<PostDraft[]> {
+export async function draftNews(opts: { topic?: string; products: string[]; existingTitles: string[]; count?: number; model?: string; maxSearches?: number }): Promise<PostDraft[]> {
   const count = Math.min(Math.max(opts.count || 3, 1), 5);
   const today = new Date().toISOString().slice(0, 10);
   const system = [
@@ -234,7 +235,7 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
   ].filter(Boolean).join("\n");
 
   const tools = [
-    { type: "web_search_20250305", name: "web_search", max_uses: 6 },
+    { type: "web_search_20250305", name: "web_search", max_uses: opts.maxSearches || 6 },
     {
       name: "save_posts",
       description: "Save the news post drafts.",
@@ -301,7 +302,7 @@ const URL_RE = /^https?:\/\/[^\s<>"']+$/i;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const TG_RE = /^@[A-Za-z0-9_]{4,32}$/;
 
-export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?: number; model?: string; focus?: string }): Promise<WebJobDraft[]> {
+export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?: number; model?: string; focus?: string; maxSearches?: number }): Promise<WebJobDraft[]> {
   const count = Math.min(Math.max(opts.count || 5, 1), 8);
   const today = new Date().toISOString().slice(0, 10);
   const system = [
@@ -319,7 +320,7 @@ export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?:
   ].join("\n");
 
   const tools = [
-    { type: "web_search_20250305", name: "web_search", max_uses: 8 },
+    { type: "web_search_20250305", name: "web_search", max_uses: opts.maxSearches || 8 },
     {
       name: "save_jobs",
       description: "Save the job drafts (real listings only).",
@@ -433,7 +434,7 @@ export function sanitizeSvg(raw: unknown): string | null {
   return svg;
 }
 
-export async function draftCoverSvg(post: { title: string; excerpt?: string; tag?: string }): Promise<string> {
+export async function draftCoverSvg(post: { title: string; excerpt?: string; tag?: string }, modelId?: string): Promise<string> {
   const system = [
     "You are an illustrator making cover art for NexusKit Hub, a Myanmar site about game top-ups, premium apps and earning money online.",
     "Return ONE self-contained SVG: viewBox=\"0 0 1200 630\", width=\"1200\" height=\"630\", xmlns=\"http://www.w3.org/2000/svg\".",
@@ -448,6 +449,7 @@ export async function draftCoverSvg(post: { title: string; excerpt?: string; tag
     [{ type: "text", text: `Post type: ${post.tag || "news"}\nTitle: ${post.title.slice(0, 200)}\nSummary: ${(post.excerpt || "").slice(0, 400)}` }],
     { type: "object", properties: { svg: { type: "string" } }, required: ["svg"], additionalProperties: false },
     9000,
+    modelId,
   );
   const svg = sanitizeSvg(out?.svg);
   if (!svg) throw new Error("The cover picture could not be used — try again");
