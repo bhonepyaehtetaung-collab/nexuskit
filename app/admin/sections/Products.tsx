@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { categoryKey, formatPrice } from "@/lib/format";
 import { ProductArt } from "../../components/ProductCard";
-import { PlusIcon, SearchIcon } from "../../components/icons";
+import { ChevronDownIcon, PlusIcon, SearchIcon } from "../../components/icons";
+import { sortProducts } from "@/lib/promotions";
 import type { AdminData } from "../data";
 import { Empty, PageHeader, Sheet, useAdminUi } from "../ui";
 
@@ -149,11 +150,30 @@ export default function Products({ data }: { data: AdminData }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [editing, setEditing] = useState<Form | null>(null);
+  const [arranging, setArranging] = useState(false);
+  const [moving, setMoving] = useState(false);
 
+  // Same order as the store's "Recommended" sort.
+  const ordered = useMemo(() => sortProducts(data.products, "recommended"), [data.products]);
   const list = useMemo(() => {
     const words = q.trim().toLowerCase();
-    return data.products.filter((p) => (cat === "all" || categoryKey(p.product_type) === cat) && (!words || `${p.name} ${p.product_type}`.toLowerCase().includes(words)));
-  }, [data.products, q, cat]);
+    return ordered.filter((p) => (cat === "all" || categoryKey(p.product_type) === cat) && (!words || `${p.name} ${p.product_type}`.toLowerCase().includes(words)));
+  }, [ordered, q, cat]);
+
+  /** Move one product (to = new index) and save the new order for every product whose number changed. */
+  const move = async (from: number, to: number) => {
+    if (to < 0 || to >= ordered.length || from === to) return;
+    const next = [...ordered];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    const changes = next.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10, old: p.sort_order })).filter((x) => x.old !== x.sort_order);
+    setMoving(true);
+    const results = await Promise.all(changes.map((x) => data.supabase.from("products").update({ sort_order: x.sort_order }).eq("id", x.id)));
+    setMoving(false);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) toast(t("ad.error", { msg: /sort_order/.test(failed.error.message) ? t("ad.p.needSql") : failed.error.message }), "error");
+    await data.reload.products();
+  };
 
   const types = Array.from(new Map(data.products.filter((p) => p.product_type).map((p) => [categoryKey(p.product_type), p.product_type])).entries());
 
@@ -176,8 +196,40 @@ export default function Products({ data }: { data: AdminData }) {
       <PageHeader
         title={t("ad.products")}
         sub={t("ad.p.count", { n: data.products.length })}
-        action={<button type="button" className="btn-primary" onClick={() => setEditing(blank(data.categories[0]?.name || ""))}><PlusIcon size={18} /> {t("ad.p.new")}</button>}
+        action={
+          <div className="flex gap-2">
+            {data.products.length > 1 && (
+              <button type="button" className={arranging ? "btn-primary" : "btn-ghost"} onClick={() => setArranging((v) => !v)} aria-pressed={arranging}>
+                {arranging ? t("ad.p.arrangeDone") : t("ad.p.arrange")}
+              </button>
+            )}
+            {!arranging && <button type="button" className="btn-primary" onClick={() => setEditing(blank(data.categories[0]?.name || ""))}><PlusIcon size={18} /> {t("ad.p.new")}</button>}
+          </div>
+        }
       />
+      {arranging && (
+        <div>
+          <p className="my mb-3 rounded-xl border border-brand/30 bg-brand/10 p-3 text-sm">{t("ad.p.arrangeHint")}</p>
+          <ol className="space-y-2">
+            {ordered.map((p, i) => (
+              <li key={p.id} className="panel flex items-center gap-3 p-2.5">
+                <span className="w-6 text-center text-sm font-bold tabular-nums text-muted">{i + 1}</span>
+                <span className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-lg bg-raised"><ProductArt product={p} className="text-xs" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{p.name}</span>
+                  <span className="block text-xs text-muted">{p.product_type || "—"} · {formatPrice(p.price)}</span>
+                </span>
+                <span className="flex flex-shrink-0 gap-1">
+                  <button type="button" disabled={moving || i === 0} onClick={() => move(i, 0)} className="btn-quiet h-9 px-2 text-xs" aria-label={t("ad.p.toTop")}>{t("ad.p.toTop")}</button>
+                  <button type="button" disabled={moving || i === 0} onClick={() => move(i, i - 1)} className="btn-quiet h-9 w-9 p-0" aria-label="↑"><ChevronDownIcon size={18} className="rotate-180" /></button>
+                  <button type="button" disabled={moving || i === ordered.length - 1} onClick={() => move(i, i + 1)} className="btn-quiet h-9 w-9 p-0" aria-label="↓"><ChevronDownIcon size={18} /></button>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {!arranging && (<>
       <div className="mb-4 space-y-3">
         <label className="relative block">
           <span className="sr-only">{t("ad.search")}</span>
@@ -216,6 +268,7 @@ export default function Products({ data }: { data: AdminData }) {
           ))}
         </ul>
       )}
+      </>)}
       {editing && <ProductSheet key={editing.id || "new"} data={data} form={editing} onClose={() => setEditing(null)} />}
     </div>
   );

@@ -15,6 +15,8 @@ const HELP = [
   "• Supplier ဈေးစာရင်း (စာ / screenshot) ကို ဒီကို <b>forward</b> လုပ်ပါ → Product draft တွေ ရေးပေးမယ်",
   "• <code>/job</code> + အလုပ်အကြောင်း (ဒါမှမဟုတ် screenshot caption) → Job post draft",
   "• <code>/news</code> (ဒါမှမဟုတ် <code>/news PUBG</code>) → Web ရှာပြီး Hub news draft",
+  "• <code>/jobs</code> (ဒါမှမဟုတ် <code>/jobs designer</code>) → Web က တကယ့် အလုပ်ခေါ်စာ ရှာပြီး Job draft",
+  "• နေ့တိုင်း မနက် ၇:၁၅ မှာ news + jobs draft တွေ အလိုအလျောက် ပို့ပါမယ်",
   "",
   "Draft တိုင်းမှာ ✅ တင်မယ် / ❌ မတင်ဘူး ခလုတ် ပါပါမယ်။ ✅ နှိပ်မှသာ website ပေါ် တက်ပါမယ်။",
 ].join("\n");
@@ -100,10 +102,11 @@ export async function POST(request: Request) {
     return ok();
   }
 
-  const kind: DraftKind = cmd === "job" ? "job" : cmd === "news" ? "news" : "products";
+  const kind: DraftKind = cmd === "job" ? "job" : cmd === "jobs" ? "jobs_web" : cmd === "news" ? "news" : "products";
+  const searches = kind === "news" || kind === "jobs_web";
   const photo = Array.isArray(msg.photo) && msg.photo.length ? msg.photo[msg.photo.length - 1] : null;
   const doc = msg.document && /^image\//.test(msg.document.mime_type || "") ? msg.document : null;
-  if (kind !== "news" && !rest && !photo && !doc) {
+  if (!searches && !rest && !photo && !doc) {
     await tg("sendMessage", { chat_id: owner, text: HELP, parse_mode: "HTML" });
     return ok();
   }
@@ -111,13 +114,13 @@ export async function POST(request: Request) {
   // Queue the slow AI work and answer Telegram at once.
   const waiting = await tg("sendMessage", {
     chat_id: owner,
-    text: kind === "news" ? "🔎 Web မှာ news ရှာနေပါတယ်… (၁ မိနစ်လောက်)" : "⏳ AI ဖတ်နေပါတယ်…",
+    text: kind === "news" ? "🔎 Web မှာ news ရှာနေပါတယ်… (၁ မိနစ်လောက်)" : kind === "jobs_web" ? "🔎 Web မှာ အလုပ်ခေါ်စာ ရှာနေပါတယ်… (၁–၂ မိနစ်)" : "⏳ AI ဖတ်နေပါတယ်…",
     reply_to_message_id: msg.message_id,
   });
   try {
     const jobId = await createJob(db, kind, "telegram", {
       text: rest,
-      topic: kind === "news" ? rest : undefined,
+      topic: searches ? rest : undefined,
       tg_file_id: photo?.file_id || doc?.file_id,
       tg_wait_id: waiting?.result?.message_id,
     }, "telegram");

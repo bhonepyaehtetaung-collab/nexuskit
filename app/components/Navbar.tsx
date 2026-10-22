@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/app/context/cartContext";
 import { LangToggle, useT, type TKey } from "@/lib/i18n";
+import ThemeToggle from "./ThemeToggle";
 import SearchOverlay from "./SearchOverlay";
 import { BagIcon, BriefcaseIcon, HomeIcon, NewsIcon, SearchIcon, UserIcon } from "./icons";
 
@@ -28,7 +29,7 @@ function CartCount({ count }: { count: number }) {
   return (
     <span
       key={count}
-      className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 animate-bump place-items-center rounded-full bg-pass px-1 text-[11px] font-bold text-ink"
+      className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 animate-bump place-items-center rounded-full bg-pass px-1 text-[11px] font-bold text-night"
     >
       {count > 99 ? "99+" : count}
     </span>
@@ -112,6 +113,7 @@ export default function Navbar() {
             >
               <SearchIcon size={20} />
             </button>
+            <ThemeToggle className="h-10" />
             <LangToggle className="h-10" />
             <Link href="/my-account" className="btn-quiet hidden h-10 px-3 md:inline-flex" aria-label={t("nav.myAccount")}>
               <UserIcon size={18} />

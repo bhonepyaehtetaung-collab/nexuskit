@@ -91,7 +91,7 @@ function OrderSheet({ order, data, onClose }: { order: any; data: AdminData; onC
         <div className="space-y-2">
           {stage !== "completed" && stage !== "cancelled" && (
             <div className="grid gap-2 sm:grid-cols-2">
-              <button type="button" disabled={busy} onClick={deliver} className="btn btn-lg bg-mint text-ink hover:bg-mint/90">{t("ad.o.deliver")}</button>
+              <button type="button" disabled={busy} onClick={deliver} className="btn btn-lg bg-mint text-night hover:bg-mint/90">{t("ad.o.deliver")}</button>
               {stage === "setup" ? (
                 <button type="button" disabled={busy} onClick={() => update({ status: "awaiting_payment", admin_note: note }, t("ad.o.asked"))} className="btn-primary btn-lg">{t("ad.o.askPay")}</button>
               ) : (
@@ -201,7 +201,7 @@ export default function Orders({ data, initialFilter }: { data: AdminData; initi
           return (
             <button key={f.key} type="button" className="chip" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
               {f.label}
-              {f.key !== "all" && n > 0 && <span className={`rounded-full px-1.5 text-xs ${f.key === "action" ? "bg-pass text-ink" : "bg-raised"}`}>{n}</span>}
+              {f.key !== "all" && n > 0 && <span className={`rounded-full px-1.5 text-xs ${f.key === "action" ? "bg-pass text-night" : "bg-raised"}`}>{n}</span>}
             </button>
           );
         })}

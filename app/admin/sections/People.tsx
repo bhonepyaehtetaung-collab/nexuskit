@@ -33,7 +33,7 @@ export function Promos({ data }: { data: AdminData }) {
 
   return (
     <div>
-      <PageHeader title={t("ad.promos")} />
+      <PageHeader title={t("ad.cp.codes")} />
       <form onSubmit={create} className="panel mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_140px_auto] sm:items-end">
         <div>
           <label className="label" htmlFor="pcode">{t("ad.pr.code")}</label>

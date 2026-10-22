@@ -61,11 +61,11 @@ function TextEditor({ data }: { data: AdminData }) {
         <p className="mb-2 text-[11px] uppercase tracking-wider text-white/60">{L("Preview", "Preview")}</p>
         <h3 className="my font-display text-2xl font-bold leading-snug text-white sm:text-3xl">
           <span className="block">{line1}</span>
-          {line2 && <span className="block text-pass">{line2}</span>}
+          {line2 && <span className="block text-[#FFC85A]">{line2}</span>}
         </h3>
         <p className="my mt-3 max-w-md text-sm text-white/80">{tr("home.heroSub")}</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="btn bg-white text-ink">{tr("home.topUpNow")}</span>
+          <span className="btn bg-white text-night">{tr("home.topUpNow")}</span>
           <span className="btn bg-white/15 text-white">{tr("home.track")}</span>
         </div>
         <div className="mt-5 flex gap-2 border-t border-white/15 pt-3 text-xs text-white/80">

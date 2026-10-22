@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { storeExtras } from "@/lib/server/storefront";
+import { withCampaignPrices } from "@/lib/promotions";
 import { createPublicClient } from "@/lib/server/public-db";
 import { getT } from "@/lib/server-lang";
 import type { TKey } from "@/lib/dict";
@@ -56,9 +58,11 @@ export default async function PostPage({ params }: Props) {
   const { lang, t } = await getT();
 
   const ids: string[] = Array.isArray(post.product_ids) ? post.product_ids.slice(0, 12) : [];
-  const { data: products } = ids.length
-    ? await createPublicClient().from("products").select("*").in("id", ids)
-    : { data: [] as any[] };
+  const db = createPublicClient();
+  const [{ data: rawProducts }, extras] = ids.length
+    ? await Promise.all([db.from("products").select("*").in("id", ids), storeExtras(db)])
+    : [{ data: [] as any[] }, { campaigns: [] }];
+  const products = withCampaignPrices(rawProducts || [], extras.campaigns);
 
   return (
     <article className="container-page max-w-3xl pb-16 pt-4 sm:pt-8">

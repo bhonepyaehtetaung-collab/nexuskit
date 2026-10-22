@@ -10,6 +10,8 @@ module.exports = {
       colors: {
         // NexusKit design tokens (see app/globals.css for the CSS variables)
         ink: "rgb(var(--ink) / <alpha-value>)",
+        // Always-dark text for bright buttons and badges (same in light and dark mode)
+        night: "#0D1120",
         surface: "rgb(var(--surface) / <alpha-value>)",
         raised: "rgb(var(--raised) / <alpha-value>)",
         line: "rgb(var(--line) / <alpha-value>)",

@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LangToggle, useT, type TKey } from "@/lib/i18n";
 import { Logo } from "../components/Navbar";
+import ThemeToggle from "../components/ThemeToggle";
 import {
-  BagIcon, BriefcaseIcon, BrushIcon, CogIcon, GridIcon, HomeIcon, LayersIcon, LogoutIcon, MenuIcon, NewsIcon, ShieldIcon, SparkIcon, TagIcon, UserIcon,
+  BagIcon, BriefcaseIcon, BrushIcon, CogIcon, GridIcon, HomeIcon, LogoutIcon, MenuIcon, NewsIcon, ShieldIcon, SparkIcon, TagIcon, UserIcon,
 } from "../components/icons";
 import ContentManager from "./ContentManager";
 import { orderStage, useAdminData, type Role } from "./data";
-import { Customers, Promos, Team } from "./sections/People";
+import { Customers, Team } from "./sections/People";
+import Promotions from "./sections/Promotions";
 import Orders from "./sections/Orders";
 import Products from "./sections/Products";
 import Settings from "./sections/Settings";
@@ -19,7 +21,7 @@ import Storefront from "./sections/Storefront";
 import Today from "./sections/Today";
 import { AdminUiProvider, Sheet, useAdminUi } from "./ui";
 
-type Tab = "today" | "ai" | "orders" | "products" | "customers" | "promos" | "hub" | "bundles" | "jobs" | "team" | "storefront" | "settings";
+type Tab = "today" | "ai" | "orders" | "products" | "customers" | "promos" | "hub" | "jobs" | "team" | "storefront" | "settings";
 
 const TABS: { id: Tab; label: TKey; Icon: ComponentType<{ size?: number }>; min: Role }[] = [
   { id: "today", label: "ad.today", Icon: HomeIcon, min: "manager" },
@@ -28,7 +30,6 @@ const TABS: { id: Tab; label: TKey; Icon: ComponentType<{ size?: number }>; min:
   { id: "products", label: "ad.products", Icon: GridIcon, min: "editor" },
   { id: "customers", label: "ad.customers", Icon: UserIcon, min: "editor" },
   { id: "promos", label: "ad.promos", Icon: TagIcon, min: "editor" },
-  { id: "bundles", label: "ad.bundles", Icon: LayersIcon, min: "editor" },
   { id: "hub", label: "ad.hub", Icon: NewsIcon, min: "editor" },
   { id: "jobs", label: "ad.jobs", Icon: BriefcaseIcon, min: "editor" },
   { id: "storefront", label: "ad.storefront", Icon: BrushIcon, min: "super_admin" },
@@ -160,13 +161,14 @@ function AdminShell() {
             >
               <Icon size={18} />
               <span className="my flex-1 text-left">{t(label)}</span>
-              {badge(id) > 0 && <span className="badge bg-pass text-[11px] text-ink">{badge(id)}</span>}
+              {badge(id) > 0 && <span className="badge bg-pass text-[11px] text-night">{badge(id)}</span>}
             </button>
           ))}
         </nav>
         <div className="space-y-2 border-t border-line pt-4">
           <p className="truncate px-3 text-xs text-muted">{me.email}</p>
           <div className="flex items-center gap-2 px-1">
+            <ThemeToggle className="h-9" />
             <LangToggle />
             <Link href="/" className="btn-quiet flex-1 px-3 py-2 text-xs">{t("ad.viewStore")}</Link>
           </div>
@@ -181,6 +183,7 @@ function AdminShell() {
         <Logo />
         <div className="flex items-center gap-2">
           <span className="badge bg-brand/15 text-[11px] text-brand">{roleLabel}</span>
+          <ThemeToggle className="h-9" />
           <LangToggle />
         </div>
       </header>
@@ -192,8 +195,8 @@ function AdminShell() {
           {tab === "products" && <Products data={data} />}
           {tab === "ai" && <AiDrafts data={data} role={me.role} onChange={() => { data.reload.ai(); data.reload.jobs(); }} />}
           {tab === "customers" && <Customers data={data} initialFilter={filter} />}
-          {tab === "promos" && <Promos data={data} />}
-          {(tab === "hub" || tab === "bundles" || tab === "jobs") && (
+          {tab === "promos" && <Promotions data={data} />}
+          {(tab === "hub" || tab === "jobs") && (
             <ContentManager section={tab} products={data.products} />
           )}
           {tab === "team" && <Team data={data} me={me.email} />}
@@ -214,7 +217,7 @@ function AdminShell() {
                 <button type="button" onClick={() => go(id)} aria-current={tab === id ? "page" : undefined} className={`relative flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] ${tab === id ? "text-brand" : "text-muted"}`}>
                   <Icon size={22} />
                   <span className="my">{t(item.label)}</span>
-                  {badge(id) > 0 && <span className="absolute left-1/2 top-1.5 ml-2 min-w-5 rounded-full bg-pass px-1.5 text-center text-[10px] font-bold leading-5 text-ink">{badge(id)}</span>}
+                  {badge(id) > 0 && <span className="absolute left-1/2 top-1.5 ml-2 min-w-5 rounded-full bg-pass px-1.5 text-center text-[10px] font-bold leading-5 text-night">{badge(id)}</span>}
                 </button>
               </li>
             );
@@ -223,7 +226,7 @@ function AdminShell() {
             <button type="button" onClick={() => setMoreOpen(true)} aria-current={rest.some((x) => x.id === tab) ? "page" : undefined} className={`relative flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] ${rest.some((x) => x.id === tab) ? "text-brand" : "text-muted"}`}>
               <MenuIcon size={22} />
               <span className="my">{t("ad.more")}</span>
-              {restBadge > 0 && <span className="absolute left-1/2 top-1.5 ml-2 min-w-5 rounded-full bg-pass px-1.5 text-center text-[10px] font-bold leading-5 text-ink">{restBadge}</span>}
+              {restBadge > 0 && <span className="absolute left-1/2 top-1.5 ml-2 min-w-5 rounded-full bg-pass px-1.5 text-center text-[10px] font-bold leading-5 text-night">{restBadge}</span>}
             </button>
           </li>
         </ul>
@@ -236,7 +239,7 @@ function AdminShell() {
               <button type="button" onClick={() => go(id)} className={`relative flex w-full flex-col items-center gap-2 rounded-2xl border p-4 text-xs ${tab === id ? "border-brand bg-brand/10 text-brand" : "border-line bg-raised"}`}>
                 <Icon size={22} />
                 <span className="my">{t(label)}</span>
-                {badge(id) > 0 && <span className="absolute right-2 top-2 rounded-full bg-pass px-1.5 text-[10px] font-bold leading-5 text-ink">{badge(id)}</span>}
+                {badge(id) > 0 && <span className="absolute right-2 top-2 rounded-full bg-pass px-1.5 text-[10px] font-bold leading-5 text-night">{badge(id)}</span>}
               </button>
             </li>
           ))}

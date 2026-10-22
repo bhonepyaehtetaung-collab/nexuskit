@@ -7,7 +7,11 @@ import type { AiImage } from "./ai";
 import { createDrafts, friendlyAiError, makeCover, sendDraftsToTelegram, telegramImage, tg, type DraftKind, type Origin } from "./drafts";
 
 export type JobKind = DraftKind | "cover";
-export type JobInput = { text?: string; topic?: string; images?: AiImage[]; notify?: boolean; tg_file_id?: string; tg_wait_id?: number; post_id?: string };
+export type JobInput = {
+  text?: string; topic?: string; images?: AiImage[]; notify?: boolean; tg_file_id?: string; tg_wait_id?: number; post_id?: string;
+  /** Daily schedule: model override and how many drafts. */
+  model?: string; count?: number; daily?: boolean;
+};
 
 const JOB_HEADER = "x-nexuskit-job";
 const jobSecret = () => process.env.TELEGRAM_WEBHOOK_SECRET || "";
@@ -65,23 +69,29 @@ export async function runJob(db: SupabaseClient, id: string): Promise<void> {
       const img = await telegramImage(input.tg_file_id);
       if (img) images.push(img);
     }
-    const drafts = await createDrafts(db, { kind: job.kind, text: input.text || "", topic: input.topic, images }, job.origin);
+    const drafts = await createDrafts(db, { kind: job.kind, text: input.text || "", topic: input.topic, images, model: input.model, count: input.count }, job.origin);
     await db.from("ai_jobs").update({
       status: "done",
       draft_count: drafts.length,
       finished_at: new Date().toISOString(),
-      input: { text: (input.text || "").slice(0, 500), topic: input.topic || null }, // drop the images
+      input: { text: (input.text || "").slice(0, 500), topic: input.topic || null, daily: input.daily || undefined }, // drop the images
     }).eq("id", id);
 
-    if (drafts.length && input.notify !== false) await sendDraftsToTelegram(db, drafts);
-    if (!drafts.length && job.origin === "telegram" && owner) {
-      await tg("sendMessage", { chat_id: owner, text: job.kind === "news" ? "အသစ် news မတွေ့ပါ။" : "ဒီထဲမှာ ထည့်စရာ မတွေ့ပါ။" });
+    if (drafts.length && input.notify !== false) {
+      if (input.daily && owner) {
+        const what = job.kind === "news" ? "📰 Hub news" : "💼 Job Board";
+        await tg("sendMessage", { chat_id: owner, text: `☀️ ဒီနေ့အတွက် ${what} draft ${drafts.length} ခု — ✅ နှိပ်မှ website ပေါ် တက်ပါမယ်။` });
+      }
+      await sendDraftsToTelegram(db, drafts);
+    }
+    if (!drafts.length && (job.origin === "telegram" || input.daily) && owner) {
+      await tg("sendMessage", { chat_id: owner, text: job.kind === "news" ? "အသစ် news မတွေ့ပါ။" : job.kind === "jobs_web" ? "အသစ် အလုပ်ခေါ်စာ မတွေ့ပါ။" : "ဒီထဲမှာ ထည့်စရာ မတွေ့ပါ။" });
     }
   } catch (error) {
     console.error("AI job failed", error);
     const message = friendlyAiError(error);
-    await db.from("ai_jobs").update({ status: "error", error: message, finished_at: new Date().toISOString(), input: {} }).eq("id", id);
-    if (job.origin === "telegram" && owner) await tg("sendMessage", { chat_id: owner, text: message });
+    await db.from("ai_jobs").update({ status: "error", error: message, finished_at: new Date().toISOString(), input: input.daily ? { daily: true } : {} }).eq("id", id);
+    if ((job.origin === "telegram" || input.daily) && owner) await tg("sendMessage", { chat_id: owner, text: input.daily ? `☀️ Daily AI (${job.kind}): ${message}` : message });
   } finally {
     if (input.tg_wait_id && owner) await tg("deleteMessage", { chat_id: owner, message_id: input.tg_wait_id });
   }

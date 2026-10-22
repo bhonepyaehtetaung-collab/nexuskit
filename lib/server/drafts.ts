@@ -1,11 +1,12 @@
 // Server-side only. Creates AI drafts and sends them to the owner's Telegram.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
-import { draftCoverSvg, draftJob, draftNews, extractProducts, type AiImage, type PricingRules } from "./ai";
+import { draftCoverSvg, draftJob, draftJobsFromWeb, draftNews, extractProducts, type AiImage, type PricingRules } from "./ai";
 import { escapeHtml } from "./telegram";
 
-export type DraftKind = "products" | "job" | "news";
-export type DraftInput = { kind: DraftKind; text?: string; images?: AiImage[]; topic?: string };
+export type DraftKind = "products" | "job" | "jobs_web" | "news";
+/** `model`/`count` are set by the daily schedule (cheaper model, 5 each). */
+export type DraftInput = { kind: DraftKind; text?: string; images?: AiImage[]; topic?: string; model?: string; count?: number };
 export type Origin = "dashboard" | "telegram";
 
 const DEFAULT_RULES: PricingRules = { markup_percent: 20, round_to: 100 };
@@ -55,6 +56,25 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
       source: text.slice(0, 8000) || null,
       data: { kind: j.kind, title: j.title, description: j.description, category: j.category, budget: j.budget, contact: j.contact },
     }];
+  } else if (input.kind === "jobs_web") {
+    const [jobs, pending] = await Promise.all([
+      db.from("jobs").select("title").order("created_at", { ascending: false }).limit(60),
+      db.from("ai_drafts").select("data").eq("kind", "job").in("status", ["pending", "rejected"]).order("created_at", { ascending: false }).limit(60),
+    ]);
+    const found = await draftJobsFromWeb({
+      count: input.count || 5,
+      model: input.model,
+      focus: input.topic || text || undefined,
+      existingTitles: [...(jobs.data || []).map((j: any) => j.title), ...(pending.data || []).map((d: any) => d.data?.title)].filter(Boolean),
+    });
+    rows = found.map((j) => ({
+      kind: "job",
+      origin,
+      note: "🌐 Web က တကယ့်အလုပ်ခေါ်စာ — Source link ကို ဖွင့်စစ်ပြီးမှ ✅ နှိပ်ပါ။",
+      sources: [{ url: j.source_url, title: j.source_title }],
+      source: input.topic || null,
+      data: { kind: j.kind, title: j.title, description: j.description, category: j.category, budget: j.budget, contact: j.contact },
+    }));
   } else {
     const [products, posts] = await Promise.all([
       db.from("products").select("name").limit(200),
@@ -63,6 +83,8 @@ export async function createDrafts(db: SupabaseClient, input: DraftInput, origin
     const pending = await db.from("ai_drafts").select("data").eq("kind", "post").eq("status", "pending").limit(40);
     const news = await draftNews({
       topic: input.topic || text,
+      count: input.count,
+      model: input.model,
       products: Array.from(new Set((products.data || []).map((p: any) => String(p.name).split(/[ ,(—-]/)[0]))),
       existingTitles: [...(posts.data || []).map((p: any) => p.title), ...(pending.data || []).map((d: any) => d.data?.title)].filter(Boolean),
     });
@@ -133,6 +155,7 @@ export function draftCard(d: any): string {
       `<b>${escapeHtml(x.title)}</b>`,
       escapeHtml(String(x.description || "").slice(0, 600)),
       `Budget: ${escapeHtml(x.budget || "—")} · Contact: ${escapeHtml(x.contact || "—")}`,
+      ...(Array.isArray(d.sources) ? d.sources : []).slice(0, 1).map((s: any) => `🔗 <a href="${escapeHtml(s.url)}">Source</a>`),
       d.note ? `⚠️ ${escapeHtml(d.note)}` : "",
     ].filter(Boolean).join("\n");
   }

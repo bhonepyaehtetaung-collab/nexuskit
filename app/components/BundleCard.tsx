@@ -30,7 +30,7 @@ export default function BundleCard({ bundle }: { bundle: any }) {
             ))}
           </div>
         )}
-        <span className="badge absolute left-3 top-3 bg-pass text-ink">{t("bundle.badge", { n: bundle.discount })}</span>
+        <span className="badge absolute left-3 top-3 bg-pass text-night">{t("bundle.badge", { n: bundle.discount })}</span>
       </div>
       <div className="flex flex-1 flex-col gap-1 p-4">
         <p className="text-xs text-muted">{t("bundle.kind")} · {(bundle.items || []).length}</p>

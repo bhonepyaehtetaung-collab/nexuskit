@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { categoryLabel, type Category } from "@/lib/categories";
 import { categoryHue, categoryKey } from "@/lib/format";
 import { useRenewals } from "@/lib/renewals";
+import { CAMPAIGN_THEMES, PRODUCT_SORTS, sortProducts, type Campaign, type ProductSort } from "@/lib/promotions";
 import ProductCard, { ProductArt } from "./components/ProductCard";
 import BundleCard from "./components/BundleCard";
 import { ClockIcon, SearchIcon, ShieldIcon } from "./components/icons";
@@ -32,11 +33,11 @@ function HeroBanner({ products, onShop }: { products: any[]; onShop: () => void 
         <div className="space-y-5">
           <h1 className="my font-display text-[1.75rem] font-bold leading-[1.3] text-white sm:text-5xl sm:leading-[1.15]">
             <span className="block">{line1}</span>
-            {line2 && <span className="block text-pass">{line2}</span>}
+            {line2 && <span className="block text-[#FFC85A]">{line2}</span>}
           </h1>
           <p className="my max-w-md text-sm text-white/80 sm:text-base">{t("home.heroSub")}</p>
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={onShop} className="btn btn-lg bg-white text-ink hover:bg-white/90">
+            <button type="button" onClick={onShop} className="btn btn-lg bg-white text-night hover:bg-white/90">
               {t("home.topUpNow")}
             </button>
             <Link href="/my-account" className="btn btn-lg bg-white/15 text-white hover:bg-white/25">
@@ -114,25 +115,101 @@ function TrustRow() {
   );
 }
 
-type Sort = "new" | "price-asc" | "price-desc";
+/** "2 ရက် 5 နာရီ" — updates every 30 s; empty until mounted so server and browser HTML match. */
+function Countdown({ until }: { until: string }) {
+  const { t } = useT();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  if (now === null) return null;
+  const left = Math.max(0, new Date(until).getTime() - now);
+  const d = Math.floor(left / 86_400_000);
+  const h = Math.floor((left % 86_400_000) / 3_600_000);
+  const m = Math.floor((left % 3_600_000) / 60_000);
+  const text = left <= 0 ? t("sale.ended") : d > 0 ? t("sale.dh", { d, h }) : t("sale.hm", { h, m });
+  return <span className="my">{left <= 0 ? text : t("sale.endsIn", { time: text })}</span>;
+}
+
+/** Seasonal campaign banner (Admin → Promotions). */
+function CampaignBanner({ campaign, onShop }: { campaign: Campaign; onShop: () => void }) {
+  const { t, lang } = useT();
+  const name = (lang === "en" && campaign.name_en?.trim()) || campaign.name;
+  const tagline = (lang === "en" && campaign.tagline_en?.trim()) || campaign.tagline || "";
+  return (
+    <section
+      className="relative overflow-hidden rounded-3xl p-5 text-white sm:p-7"
+      style={{ background: CAMPAIGN_THEMES[campaign.theme || "violet"] || CAMPAIGN_THEMES.violet }}
+    >
+      <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-white/15 blur-2xl" aria-hidden="true" />
+      <div className="relative flex flex-wrap items-center gap-4">
+        {campaign.emoji && <span className="text-4xl sm:text-5xl" aria-hidden="true">{campaign.emoji}</span>}
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="badge bg-white text-[12px] font-bold text-night">{t("sale.off", { n: Number(campaign.discount_percent) })}</span>
+            <span className="text-xs text-white/80"><Countdown until={campaign.ends_at} /></span>
+          </p>
+          <h2 className="my font-display text-xl font-bold leading-snug sm:text-2xl">{name}</h2>
+          {tagline && <p className="my text-sm text-white/85">{tagline}</p>}
+        </div>
+        <button type="button" onClick={onShop} className="btn bg-white text-night hover:bg-white/90">{t("sale.shop")}</button>
+      </div>
+    </section>
+  );
+}
+
+const SORT_KEY = "nk_sort";
+const SORT_LABEL = {
+  recommended: "shop.sortRecommended",
+  popular: "shop.sortPopular",
+  new: "shop.sortNew",
+  "price-asc": "shop.sortLow",
+  "price-desc": "shop.sortHigh",
+} as const;
 
 export default function HomeView({
   products,
   categories,
   bundles,
   paymentMethods,
+  campaigns = [],
+  popular = [],
 }: {
   products: any[];
   categories: Category[];
   bundles: any[];
   paymentMethods: { id: string | number; provider_name: string }[];
+  campaigns?: Campaign[];
+  popular?: string[];
 }) {
   const { t, lang } = useT();
   const router = useRouter();
   const params = useSearchParams();
   const active = params.get("cat") || "all";
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>("new");
+  const [sort, setSortState] = useState<ProductSort>("recommended");
+  const hasSale = useMemo(() => products.some((p) => p.sale), [products]);
+  const banners = campaigns.filter((c) => c.show_banner !== false).slice(0, 2);
+
+  // Remember the shopper's sort choice on this device.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SORT_KEY) as ProductSort | null;
+      if (saved && PRODUCT_SORTS.includes(saved)) setSortState(saved);
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
+  const setSort = (next: ProductSort) => {
+    setSortState(next);
+    try {
+      localStorage.setItem(SORT_KEY, next);
+    } catch {
+      /* storage blocked */
+    }
+  };
   const gridRef = useRef<HTMLDivElement>(null);
 
   const scrollToGrid = () => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -144,20 +221,21 @@ export default function HomeView({
   const visible = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const list = products.filter((p) => {
-      const inCategory = active === "all" || categoryKey(p.product_type) === active;
+      const inCategory = active === "all" || (active === "sale" ? !!p.sale : categoryKey(p.product_type) === active);
       const hay = `${p.name ?? ""} ${p.description ?? ""} ${p.product_type ?? ""}`.toLowerCase();
       return inCategory && words.every((w) => hay.includes(w));
     });
-    if (sort === "price-asc") list.sort((a, b) => Number(a.price) - Number(b.price));
-    if (sort === "price-desc") list.sort((a, b) => Number(b.price) - Number(a.price));
-    return list;
-  }, [products, active, query, sort]);
+    return sortProducts(list, sort, popular);
+  }, [products, active, query, sort, popular]);
 
   const steps = [t("home.step1"), t("home.step2"), t("home.step3")];
 
   return (
     <div className="container-page space-y-8 pb-16 pt-4 sm:space-y-12 sm:pt-8">
       <RenewalBanner />
+      {banners.map((c) => (
+        <CampaignBanner key={c.id} campaign={c} onShop={() => setCategory(hasSale ? "sale" : "all")} />
+      ))}
       <HeroBanner products={products} onShop={scrollToGrid} />
       <TrustRow />
 
@@ -206,7 +284,7 @@ export default function HomeView({
       {/* All products */}
       <section ref={gridRef} className="scroll-mt-20" aria-labelledby="grid-title">
         <h2 id="grid-title" className="my mb-3 font-display text-xl font-bold sm:text-2xl">
-          {(() => { const c = categories.find((x) => x.key === active); return c ? categoryLabel(c, lang) : t("store.products"); })()}
+          {active === "sale" ? t("sale.chip") : (() => { const c = categories.find((x) => x.key === active); return c ? categoryLabel(c, lang) : t("store.products"); })()}
         </h2>
         <div className="sticky top-16 z-30 -mx-4 mb-4 space-y-3 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
           <div className="flex gap-2">
@@ -216,17 +294,18 @@ export default function HomeView({
               <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search.placeholder")} className="field pl-10" />
             </label>
             <label>
-              <span className="sr-only">Sort</span>
-              <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="field w-auto pr-8">
-                <option value="new">{t("shop.sortNew")}</option>
-                <option value="price-asc">{t("shop.sortLow")}</option>
-                <option value="price-desc">{t("shop.sortHigh")}</option>
+              <span className="sr-only">{t("shop.sort")}</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as ProductSort)} className="field w-auto max-w-[44vw] pr-8 sm:max-w-none">
+                {PRODUCT_SORTS.map((s) => <option key={s} value={s}>{t(SORT_LABEL[s])}</option>)}
               </select>
             </label>
           </div>
           {categories.length > 0 && (
             <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label={t("home.categories")}>
               <button type="button" className="chip py-1.5" aria-pressed={active === "all"} onClick={() => setCategory("all")}>{t("store.all")}</button>
+              {hasSale && (
+                <button type="button" className="chip py-1.5" aria-pressed={active === "sale"} onClick={() => setCategory("sale")}>{t("sale.chip")}</button>
+              )}
               {categories.map((c) => (
                 <button key={c.key} type="button" className="chip py-1.5" aria-pressed={active === c.key} onClick={() => setCategory(c.key)}>{categoryLabel(c, lang)}</button>
               ))}

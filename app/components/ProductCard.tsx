@@ -39,6 +39,11 @@ export default function ProductCard({ product }: { product: any }) {
 
       <div className="pointer-events-none relative aspect-square overflow-hidden bg-raised">
         <ProductArt product={product} className="transition-transform duration-500 group-hover:scale-[1.04]" />
+        {product.sale && (
+          <span className="badge absolute right-2 top-2 bg-danger text-[11px] font-bold text-white shadow">
+            {t("sale.off", { n: product.sale.percent })}
+          </span>
+        )}
         {days > 0 && (
           <span className="badge absolute left-2 top-2 bg-ink/80 text-[11px] text-text backdrop-blur">
             <ClockIcon size={12} /> {t("product.days", { n: days })}
@@ -50,7 +55,10 @@ export default function ProductCard({ product }: { product: any }) {
         {product.product_type && <p className="truncate text-[11px] font-medium text-muted sm:text-xs">{product.product_type}</p>}
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug sm:text-base">{product.name}</h3>
         <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-          <span className="price text-base sm:text-lg">{formatPrice(product.price)}</span>
+          <span className="flex min-w-0 flex-col">
+            {product.sale && <s className="text-[11px] leading-none text-muted sm:text-xs">{formatPrice(product.list_price)}</s>}
+            <span className={`price text-base sm:text-lg ${product.sale ? "text-danger" : ""}`}>{formatPrice(product.price)}</span>
+          </span>
           {needsInfo ? (
             <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-brand-strong text-white" aria-hidden="true">
               <PlusIcon size={18} />

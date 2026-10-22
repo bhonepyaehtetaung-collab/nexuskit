@@ -33,7 +33,7 @@ function SuccessContent() {
       <ol className="space-y-4 p-6 sm:p-8">
         {steps.map((text, i) => (
           <li key={i} className="flex gap-3">
-            <span className={`grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-xs font-bold ${i === 0 ? "bg-mint text-ink" : "bg-raised text-muted"}`}>
+            <span className={`grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-xs font-bold ${i === 0 ? "bg-mint text-night" : "bg-raised text-muted"}`}>
               {i === 0 ? <CheckIcon size={14} /> : i + 1}
             </span>
             <span className={`my text-sm ${i === 0 ? "text-text" : "text-muted"}`}>{text}</span>

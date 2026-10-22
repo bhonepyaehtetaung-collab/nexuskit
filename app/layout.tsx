@@ -5,6 +5,7 @@ import { CartProvider } from "./context/cartContext";
 import { LangProvider } from "@/lib/i18n";
 import { getLang, getTextOverrides } from "@/lib/server-lang";
 import ConditionalUI from "./components/ConditionalUI";
+import { themeScript } from "@/lib/theme";
 
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 const body = Figtree({ subsets: ["latin"], variable: "--font-body", display: "swap" });
@@ -27,7 +28,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0D1120",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F4F5FA" },
+    { media: "(prefers-color-scheme: dark)", color: "#0D1120" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -37,7 +41,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Burmese by default; the language switch stores the choice in a cookie.
   const [lang, overrides] = await Promise.all([getLang(), getTextOverrides()]);
   return (
-    <html lang={lang} className={`${display.variable} ${body.variable} ${myanmar.variable}`}>
+    <html lang={lang} className={`${display.variable} ${body.variable} ${myanmar.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Apply the saved light/dark choice before the first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="flex min-h-screen flex-col bg-ink text-text antialiased">
         <LangProvider initialLang={lang} overrides={overrides}>
           <CartProvider>

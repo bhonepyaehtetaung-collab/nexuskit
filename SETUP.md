@@ -80,3 +80,18 @@ AI က **draft** ပဲ ရေးပါတယ်။ သင် ✅ approve လု
 5. **Telegram bot** (website ကို Netlify ပေါ် တင်ပြီးမှ) — Live site → Admin → Settings → **Bot ကို ချိတ်မယ်**။
    ပြီးရင် supplier bot ဆီက ဈေးစာရင်းကို ကိုယ့် bot ဆီ forward လုပ်ပါ။ `/job ...`၊ `/news` ပို့လို့ရပါတယ်။
    ကိုယ့် chat (`TELEGRAM_CHAT_ID`) ကလွဲပြီး တခြားသူ ပို့တာကို bot က လျစ်လျူရှုပါတယ်။
+
+## 8. Sorting, Seasonal ပရိုမိုးရှင်း, နေ့စဉ် AI draft, Light mode
+
+1. **Database** — SQL Editor → New query → **`supabase/promotions.sql`** အကုန် paste → Run (ထပ် run လည်း ရပါတယ်)။
+2. **Product အစဉ်** — Admin → Products → **အစဉ်စီမယ်** → ↑↓ နဲ့ ရွှေ့ပါ။ Store ရဲ့ "အကြံပြု" sort က ဒီအစဉ်ကို သုံးပါတယ်။
+   Customer တွေက အကြံပြု / လူကြိုက်အများဆုံး / အသစ်ဆုံး / ဈေးနည်း→များ / ဈေးများ→နည်း ရွေးလို့ရပါတယ်။
+3. **Seasonal campaign** — Admin → **ပရိုမိုးရှင်း** → 🎉 Seasonal → Campaign အသစ်။ စ/ဆုံး ရက်၊ % နဲ့
+   Product အားလုံး / Category / Product တချို့ ရွေးပါ။ ဈေးကို database (`create_order`) ကပဲ တွက်လို့ browser က ပြင်လို့ မရပါ။
+   Combo (Toolkit) နဲ့ Promo code တွေလည်း ဒီ tab ထဲမှာ ရှိပါတယ်။
+4. **နေ့စဉ် AI draft** — နေ့တိုင်း မနက် ၇:၁၅ (Netlify scheduled function `ai-daily`) မှာ Hub news ၅ ပုဒ် + Web က
+   တကယ့် အလုပ်ခေါ်စာ ၅ ခုကို Claude Haiku 5.5 နဲ့ ရှာပြီး Telegram ကို ✅/❌ နဲ့ ပို့ပါတယ်။ ✅ နှိပ်မှ website ပေါ် တက်ပါတယ်။
+   Admin → AI Drafts → "☀️ နေ့စဉ် AI draft" မှာ ဖွင့်/ပိတ်၊ အရေအတွက် ပြောင်းပြီး "အခု run မယ်" နှိပ်လို့ရပါတယ်။
+   Telegram မှာ `/jobs` (ဒါမှမဟုတ် `/jobs designer`) ပို့ရင်လည်း ချက်ချင်း ရှာပေးပါတယ်။
+   Model ပြောင်းချင်ရင် Netlify env `AI_DAILY_MODEL` (default `claude-haiku-5-5`)။
+5. **Light mode** — Website ပေါ်က ☀/☾ ခလုတ်။ မနှိပ်ရသေးရင် ဖုန်းရဲ့ setting အတိုင်း ပြပါတယ်။

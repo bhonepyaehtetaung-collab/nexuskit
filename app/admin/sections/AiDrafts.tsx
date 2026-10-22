@@ -119,6 +119,8 @@ export default function AiDrafts({ data, role, onChange }: { data: AdminData; ro
     <div className="space-y-5">
       <PageHeader title="AI Drafts" sub={L("AI က ရေးပေးမယ် — သင် approve လုပ်မှ website ပေါ် တက်မယ်", "AI writes drafts — nothing goes live until you approve")} />
 
+      <DailyCard data={data} role={role} L={L} onDone={async () => { setFilter("pending"); await load(); onChange(); }} />
+
       {/* Composer */}
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
@@ -180,7 +182,7 @@ export default function AiDrafts({ data, role, onChange }: { data: AdminData; ro
           {(["pending", "approved", "rejected"] as const).map((f) => (
             <button key={f} type="button" className="chip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
               {f === "pending" ? L("စစ်ရန်", "To review") : f === "approved" ? L("တင်ပြီး", "Approved") : L("ပယ်ပြီး", "Rejected")}
-              {counts[f] > 0 && <span className={`rounded-full px-1.5 text-xs ${f === "pending" ? "bg-pass text-ink" : "bg-raised"}`}>{counts[f]}</span>}
+              {counts[f] > 0 && <span className={`rounded-full px-1.5 text-xs ${f === "pending" ? "bg-pass text-night" : "bg-raised"}`}>{counts[f]}</span>}
             </button>
           ))}
         </div>
@@ -201,6 +203,108 @@ export default function AiDrafts({ data, role, onChange }: { data: AdminData; ro
 }
 
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Daily auto drafts (5 news + 5 real jobs every morning)               */
+/* ------------------------------------------------------------------ */
+
+type Daily = { news: boolean; jobs: boolean; count: number };
+
+function DailyCard({ data, role, L, onDone }: { data: AdminData; role: Role; L: (my: string, en: string) => string; onDone: () => Promise<void> }) {
+  const { toast } = useAdminUi();
+  const saved: Daily = { news: data.settings?.ai_daily?.news !== false, jobs: data.settings?.ai_daily?.jobs !== false, count: Number(data.settings?.ai_daily?.count) || 5 };
+  const [running, setRunning] = useState(false);
+  const [last, setLast] = useState<any[]>([]);
+  const canEdit = role === "super_admin";
+  const ready = data.settings && "ai_daily" in data.settings;
+
+  const loadLast = useCallback(async () => {
+    const { data: rows } = await data.supabase.from("ai_jobs").select("kind, status, error, draft_count, created_at").eq("input->>daily", "true").order("created_at", { ascending: false }).limit(4);
+    setLast(rows || []);
+  }, [data.supabase]);
+  useEffect(() => { loadLast(); }, [loadLast]);
+
+  const save = async (next: Daily) => {
+    const { error } = await data.supabase.from("site_settings").update({ ai_daily: next }).eq("id", 1);
+    if (error) return toast(/ai_daily/.test(error.message) ? L("supabase/promotions.sql ကို အရင် run ပါ", "Run supabase/promotions.sql first") : error.message, "error");
+    data.setSettings((s: any) => ({ ...s, ai_daily: next }));
+    toast(L("သိမ်းပြီးပါပြီ", "Saved"));
+  };
+
+  const runNow = async () => {
+    const kinds = [saved.news && "news", saved.jobs && "jobs_web"].filter(Boolean) as string[];
+    if (!kinds.length) return toast(L("News / Jobs တစ်ခုခု ဖွင့်ပါ", "Turn on news or jobs first"), "error");
+    setRunning(true);
+    try {
+      const ids: string[] = [];
+      for (const kind of kinds) {
+        const res = await fetch("/api/ai/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, daily: true }) });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `Error ${res.status}`);
+        ids.push(json.job_id);
+      }
+      toast(L("Web ရှာနေပါတယ် (၂–၄ မိနစ်) — ပြီးရင် Telegram ကိုလည်း ပို့ပါမယ်", "Searching the web (2–4 min) — drafts will also go to Telegram"), "info");
+      for (let i = 0; i < 100; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const { data: rows } = await data.supabase.from("ai_jobs").select("status").in("id", ids);
+        if (rows && rows.length === ids.length && rows.every((r: any) => r.status === "done" || r.status === "error")) break;
+      }
+      await loadLast();
+      await onDone();
+    } catch (err: any) {
+      toast(err.message, "error");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const kindLabel = (k: string) => (k === "news" ? "📰 News" : "💼 Jobs");
+  return (
+    <section className="panel space-y-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="my font-semibold">☀️ {L("နေ့စဉ် AI draft", "Daily AI drafts")}</h2>
+          <p className="my text-xs text-muted">
+            {L(`နေ့တိုင်း မနက် ၇:၁၅ — Hub news ${saved.count} ပုဒ် + Web က တကယ့်အလုပ်ခေါ်စာ ${saved.count} ခု (Haiku 5.5)။ Telegram မှာ ✅ နှိပ်မှ တင်ပါမယ်။`, `Every day at 7:15 AM — ${saved.count} Hub news + ${saved.count} real job openings from the web (Haiku 5.5). Nothing goes live until you tap ✅ on Telegram.`)}
+          </p>
+        </div>
+        <button type="button" onClick={runNow} disabled={running || !ready} className="btn-ghost py-2 text-sm">
+          {running ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-brand" /> {L("ရှာနေပါတယ်…", "Working…")}</> : L("အခု run မယ်", "Run now")}
+        </button>
+      </div>
+      {!ready ? (
+        <p className="my rounded-xl bg-pass/10 px-3 py-2 text-xs text-pass">⚠ {L("supabase/promotions.sql ကို Supabase မှာ run ပြီးမှ အလုပ်လုပ်ပါမယ်", "Run supabase/promotions.sql in Supabase to enable this")}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {([["news", L("Hub news", "Hub news")], ["jobs", L("Job Board", "Job Board")]] as const).map(([key, label]) => (
+            <button key={key} type="button" disabled={!canEdit} className="chip py-1.5" aria-pressed={saved[key]} onClick={() => save({ ...saved, [key]: !saved[key] })}>
+              {saved[key] ? "✓" : "○"} {label}
+            </button>
+          ))}
+          <label className="chip gap-2 py-1 pr-1.5">
+            <span className="my">{L("တစ်မျိုးလျှင်", "Each")}</span>
+            <select disabled={!canEdit} value={saved.count} onChange={(e) => save({ ...saved, count: Number(e.target.value) })} className="rounded-lg bg-raised px-2 py-1 text-text">
+              {[3, 4, 5, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+      {last.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted">
+          {last.map((j, i) => (
+            <li key={i} className="flex flex-wrap gap-x-2">
+              <span>{new Date(j.created_at).toLocaleString()}</span>
+              <span>{kindLabel(j.kind)}</span>
+              <span className={j.status === "error" ? "text-danger" : j.status === "done" ? "text-mint" : ""}>
+                {j.status === "done" ? L(`draft ${j.draft_count} ခု`, `${j.draft_count} drafts`) : j.status === "error" ? j.error || "error" : j.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 function PricingCard({ data, L }: { data: AdminData; L: (my: string, en: string) => string }) {
   const { toast } = useAdminUi();
@@ -361,10 +465,15 @@ function DraftCard({ draft, data, L, onDecide }: { draft: Draft; data: AdminData
         </>
       )}
 
+      {draft.kind === "job" && draft.sources?.length > 0 && (
+        <a href={draft.sources[0].url} target="_blank" rel="noreferrer noopener" className="btn-ghost w-full justify-start truncate py-2 text-xs text-info">
+          ↗ {L("မူရင်း အလုပ်ခေါ်စာ ဖွင့်စစ်မယ်", "Open the original listing")}: {String(draft.sources[0].title || draft.sources[0].url).slice(0, 60)}
+        </a>
+      )}
       {draft.note && <p className="my rounded-xl bg-pass/10 px-3 py-2 text-xs text-pass">⚠ {draft.note}</p>}
 
       <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-1">
-        <button type="button" disabled={busy} onClick={() => act(true)} className="btn bg-mint text-ink hover:bg-mint/90">
+        <button type="button" disabled={busy} onClick={() => act(true)} className="btn bg-mint text-night hover:bg-mint/90">
           ✓ {draft.kind === "product" ? L("ဆိုင်ထဲ ထည့်မယ်", "Add to store") : L("တင်မယ်", "Publish")}
         </button>
         <button type="button" disabled={busy} onClick={() => act(false)} className="btn-quiet text-danger">{L("မတင်ဘူး", "Reject")}</button>

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import LoginPanel from "../components/LoginPanel";
+import { withCampaignPrices } from "@/lib/promotions";
+import { isNetworkError, shrinkImage } from "@/lib/image";
 import { createClient } from "@/utils/supabase/client";
 import { useCart } from "@/app/context/cartContext";
 import { formatPrice } from "@/lib/format";
@@ -93,7 +95,8 @@ export default function CheckoutPage() {
       supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       supabase.auth.getUser(),
       ids.length && !synced.current ? supabase.from("products").select("*").in("id", ids) : Promise.resolve({ data: null }),
-    ]).then(([methodsRes, settingsRes, userRes, productsRes]) => {
+      ids.length && !synced.current ? supabase.from("campaigns").select("*") : Promise.resolve({ data: null }),
+    ]).then(([methodsRes, settingsRes, userRes, productsRes, campaignsRes]) => {
       const list = methodsRes.data || [];
       setMethods(list);
       setSettings(settingsRes.data || { enable_pay_later: true });
@@ -103,7 +106,8 @@ export default function CheckoutPage() {
       if (u?.email) setEmail(u.email);
       if (productsRes.data) {
         synced.current = true;
-        dispatch({ type: "SYNC_PRODUCTS", payload: productsRes.data });
+        // Same campaign prices the database will charge.
+        dispatch({ type: "SYNC_PRODUCTS", payload: withCampaignPrices(productsRes.data, (campaignsRes as any)?.data || []) });
       }
       setLoading(false);
     });
@@ -141,10 +145,13 @@ export default function CheckoutPage() {
   const discount = promo ? Math.round(subtotal * promo.discountPercent) / 100 : 0;
   const total = Math.max(0, subtotal - discount);
 
-  const pickSlip = (file: File | undefined | null) => {
+  const pickSlip = async (picked: File | undefined | null) => {
     setError("");
-    if (!file) return;
-    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) return setError(t("co.errType"));
+    if (!picked) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(picked.type)) return setError(t("co.errType"));
+    if (picked.size > 25 * 1024 * 1024) return setError(t("co.errSize", { mb: MAX_SLIP_MB }));
+    // Big phone screenshots are shrunk first; very large uploads fail with "Load failed".
+    const file = await shrinkImage(picked);
     if (file.size > MAX_SLIP_MB * 1024 * 1024) return setError(t("co.errSize", { mb: MAX_SLIP_MB }));
     setSlip(file);
   };
@@ -215,7 +222,7 @@ export default function CheckoutPage() {
       const params = new URLSearchParams({ type: isPayLater ? "pay-later" : "standard", order: String(data.id).slice(0, 8) });
       router.push(`/success?${params}`);
     } catch (err: any) {
-      setError(err.message);
+      setError(isNetworkError(err) ? t("co.errNetwork") : err?.message || t("co.errGeneric"));
       setSubmitting(false);
     }
   };
@@ -257,7 +264,7 @@ export default function CheckoutPage() {
   }
 
   const submitLabel = submitting ? t("co.placing") : isPayLater ? t("co.requestSetup") : t("co.place");
-  const submitClass = isPayLater ? "btn bg-mint text-ink hover:bg-mint/90" : "btn-primary";
+  const submitClass = isPayLater ? "btn bg-mint text-night hover:bg-mint/90" : "btn-primary";
   let step = 0;
 
   return (
@@ -310,7 +317,7 @@ export default function CheckoutPage() {
                   <label key={m.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3.5 transition-colors ${active ? "border-brand bg-brand/10" : "border-line bg-raised hover:border-muted/50"}`}>
                     <input type="radio" name="method" value={m.id} checked={active} onChange={() => setMethod(String(m.id))} className="sr-only" />
                     <span className="grid h-11 w-11 flex-shrink-0 place-items-center overflow-hidden rounded-xl bg-white">
-                      {m.qr_url ? <img src={m.qr_url} alt="" className="h-full w-full object-contain" /> : <span className="text-xs font-bold text-ink">{String(m.provider_name).slice(0, 2)}</span>}
+                      {m.qr_url ? <img src={m.qr_url} alt="" className="h-full w-full object-contain" /> : <span className="text-xs font-bold text-night">{String(m.provider_name).slice(0, 2)}</span>}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold">{m.provider_name}</span>

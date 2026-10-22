@@ -495,7 +495,7 @@ function JobModeration() {
               <dt className="text-muted">Posted by</dt><dd className="break-all">{j.poster_email}</dd>
             </dl>
             <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-              {j.status !== "approved" && <button type="button" className="btn bg-mint px-4 py-2 text-ink hover:bg-mint/90" onClick={() => setJobStatus(j.id, "approved")}>Approve (30 days)</button>}
+              {j.status !== "approved" && <button type="button" className="btn bg-mint px-4 py-2 text-night hover:bg-mint/90" onClick={() => setJobStatus(j.id, "approved")}>Approve (30 days)</button>}
               {j.status === "pending" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "rejected")}>Reject</button>}
               {j.status === "approved" && <button type="button" className="btn-ghost px-4 py-2" onClick={() => setJobStatus(j.id, "closed")}>Close</button>}
               <button type="button" className="btn-ghost px-4 py-2" onClick={() => setEditing({ id: j.id, kind: j.kind, title: j.title || "", description: j.description || "", category: j.category || "", budget: j.budget || "", contact: j.contact || "" })}>Edit</button>

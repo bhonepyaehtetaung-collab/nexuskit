@@ -69,7 +69,7 @@ export default function BundlePage() {
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <header className="relative overflow-hidden rounded-3xl border border-line bg-[linear-gradient(140deg,rgb(var(--raised)),rgb(var(--surface)))] p-5 sm:p-8">
-            <span className="badge bg-pass text-ink">{t("bundle.badge", { n: bundle.discount })}</span>
+            <span className="badge bg-pass text-night">{t("bundle.badge", { n: bundle.discount })}</span>
             <h1 className="my mt-3 font-display text-2xl font-bold leading-snug sm:text-4xl">{bundle.name}</h1>
             {bundle.description && <p className="my mt-2 max-w-xl whitespace-pre-wrap text-muted">{bundle.description}</p>}
             <div className="mt-5 flex -space-x-4">

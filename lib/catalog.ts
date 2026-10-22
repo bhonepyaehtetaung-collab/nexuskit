@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { buildCategories, type Category } from "./categories";
 import { withBundlePrices, bundleCartItem } from "./bundles";
+import { liveCampaigns, withCampaignPrices, type Campaign } from "./promotions";
 
 export { buildCategories };
 export { withBundlePrices, bundleCartItem };
@@ -14,6 +15,7 @@ export type Catalog = {
   settings: any;
   paymentMethods: any[];
   bundles: any[];
+  campaigns: Campaign[];
 };
 
 let cache: Promise<Catalog> | null = null;
@@ -28,18 +30,22 @@ export function loadCatalog(): Promise<Catalog> {
       supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("payment_methods").select("id, provider_name"),
       supabase.from("bundles").select("*").eq("active", true).order("created_at", { ascending: false }),
-    ]).then(([p, c, s, m, b]) => {
+      supabase.from("campaigns").select("*"),
+    ]).then(([p, c, s, m, b, cp]) => {
       if (p.error) {
         cache = null;
         throw p.error;
       }
-      const products = p.data || [];
+      const raw = p.data || [];
+      const campaigns = cp.error ? [] : liveCampaigns(cp.data as Campaign[]);
+      const products = withCampaignPrices(raw, campaigns);
       return {
         products,
-        categories: buildCategories(products, c.data || []),
+        campaigns,
+        categories: buildCategories(raw, c.data || []),
         settings: s.data || {},
         paymentMethods: m.data || [],
-        bundles: b.error ? [] : withBundlePrices(b.data || [], products),
+        bundles: b.error ? [] : withBundlePrices(b.data || [], raw),
       };
     });
   }

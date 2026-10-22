@@ -181,7 +181,10 @@ export default function ProductDetail() {
                         </span>
                       )}
                       <span className="line-clamp-2 pr-5 text-sm font-medium leading-snug">{p.name}</span>
-                      <span className="price text-sm">{formatPrice(p.price)}</span>
+                      <span className="flex flex-wrap items-baseline gap-x-1.5">
+                        <span className={`price text-sm ${p.sale ? "text-danger" : ""}`}>{formatPrice(p.price)}</span>
+                        {p.sale && <s className="text-[11px] text-muted">{formatPrice(p.list_price)}</s>}
+                      </span>
                     </button>
                   );
                 })}
@@ -217,6 +220,12 @@ export default function ProductDetail() {
         {/* Desktop summary */}
         <aside className="hidden space-y-4 rounded-2xl border border-line bg-surface p-5 lg:sticky lg:top-24 lg:block">
           <p className="text-sm text-muted">{product.name} × {quantity}</p>
+          {product.sale && (
+            <p className="my flex items-center gap-2 text-sm">
+              <span className="badge bg-danger text-[11px] font-bold text-white">{t("sale.off", { n: product.sale.percent })}</span>
+              <span className="text-muted">{product.sale.name}</span>
+            </p>
+          )}
           <div className="flex items-baseline justify-between">
             <span className="font-semibold">{t("product.total")}</span>
             <span className="price text-3xl">{formatPrice(total)}</span>
@@ -232,7 +241,10 @@ export default function ProductDetail() {
       <div className="fixed inset-x-0 bottom-[calc(4.4rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-ink/95 px-4 py-3 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-6xl items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted">{t("product.total")}</p>
+            <p className="text-xs text-muted">
+              {t("product.total")}
+              {product.sale && <span className="ml-1.5 font-bold text-danger">{t("sale.off", { n: product.sale.percent })}</span>}
+            </p>
             <p className="price text-xl leading-tight">{formatPrice(total)}</p>
           </div>
           <button type="button" onClick={() => add(false)} className="btn-ghost h-12 w-12 p-0" aria-label={t("product.addToCart")}>

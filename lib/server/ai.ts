@@ -38,6 +38,8 @@ export type PostDraft = {
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const model = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
+/** Cheaper model for the automatic daily drafts. */
+export const dailyModel = () => process.env.AI_DAILY_MODEL || "claude-haiku-5-5";
 
 export const aiConfigured = () => !!process.env.ANTHROPIC_API_KEY;
 
@@ -218,7 +220,7 @@ export async function draftJob(opts: { text: string; images?: AiImage[] }): Prom
 /* Hub news: search the web, then write short Burmese posts            */
 /* ------------------------------------------------------------------ */
 
-export async function draftNews(opts: { topic?: string; products: string[]; existingTitles: string[]; count?: number }): Promise<PostDraft[]> {
+export async function draftNews(opts: { topic?: string; products: string[]; existingTitles: string[]; count?: number; model?: string }): Promise<PostDraft[]> {
   const count = Math.min(Math.max(opts.count || 3, 1), 5);
   const today = new Date().toISOString().slice(0, 10);
   const system = [
@@ -261,7 +263,7 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
   const messages: any[] = [{ role: "user", content: "Find this week's news and draft the posts." }];
   const seen = new Map<string, string>();
   for (let turn = 0; turn < 4; turn++) {
-    const res = await callClaude({ max_tokens: 8000, system, tools, messages });
+    const res = await callClaude({ max_tokens: 8000, system, tools, messages, ...(opts.model ? { model: opts.model } : {}) });
     for (const block of res.content || []) {
       if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
         for (const r of block.content) if (r?.url) seen.set(r.url, r.title || r.url);
@@ -285,6 +287,123 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
     // Model answered in text without calling the tool: ask once more.
     messages.push({ role: "assistant", content: res.content });
     messages.push({ role: "user", content: "Now call save_posts with your drafts (or an empty list)." });
+  }
+  return [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Job Board: REAL openings found on the web (never invented)          */
+/* ------------------------------------------------------------------ */
+
+export type WebJobDraft = JobDraft & { source_url: string; source_title: string; company: string };
+
+const URL_RE = /^https?:\/\/[^\s<>"']+$/i;
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const TG_RE = /^@[A-Za-z0-9_]{4,32}$/;
+
+export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?: number; model?: string; focus?: string }): Promise<WebJobDraft[]> {
+  const count = Math.min(Math.max(opts.count || 5, 1), 8);
+  const today = new Date().toISOString().slice(0, 10);
+  const system = [
+    `Today is ${today}. You find REAL, currently open job and freelance opportunities for NexusKit's Job Board, read by people in Myanmar (students, freelancers, designers, video editors, writers, developers, virtual assistants, sales and customer-service staff).`,
+    "Use web search to find genuine job listings posted in the last ~21 days that a person in Myanmar can actually apply for: jobs located in Myanmar (Yangon, Mandalay, etc.) or remote roles that accept applicants from Myanmar / Asia / worldwide. Good sources: job boards and company career pages, official Facebook/Telegram job posts that are publicly indexed, remote-job sites.",
+    opts.focus ? `Prefer: ${opts.focus.slice(0, 200)}` : "Prefer roles related to digital work: design (Canva, Figma), content, social media, video, translation (Burmese/English), IT, online sales, customer support, teaching.",
+    `Skip anything already posted: ${opts.existingTitles.slice(0, 60).join(" | ") || "(none)"}.`,
+    "STRICT RULES — these posts are real people's job applications:",
+    "- Only include a job if a page you actually opened shows it. Never invent, merge or guess any job, company, salary, deadline or contact.",
+    "- Each job MUST have source_url = the exact listing page, and apply = how to apply exactly as the listing says (an application URL, an email, or a Telegram @handle). No way to apply → skip it.",
+    "- Skip listings that ask applicants to pay a fee, look like scams/MLM, are expired/closed, or need a visa the reader is unlikely to have.",
+    "- salary: only if the listing states it (keep the currency), else empty.",
+    `Then call save_jobs once with up to ${count} jobs. For each: title (≤ 100 chars, English job title + company), company, location (e.g. \"Yangon\" or \"Remote\"), category (e.g. Design, IT, Marketing), salary, deadline (as stated or empty), apply, source_url, description (80–600 chars of Burmese in your own words: what the job is, key requirements, location/remote, and deadline if any).`,
+    "If you cannot find enough real listings, save fewer — an empty list is fine.",
+  ].join("\n");
+
+  const tools = [
+    { type: "web_search_20250305", name: "web_search", max_uses: 8 },
+    {
+      name: "save_jobs",
+      description: "Save the job drafts (real listings only).",
+      input_schema: {
+        type: "object",
+        properties: {
+          jobs: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                company: { type: "string" },
+                location: { type: "string" },
+                category: { type: "string" },
+                salary: { type: "string" },
+                deadline: { type: "string" },
+                apply: { type: "string" },
+                source_url: { type: "string" },
+                description: { type: "string" },
+              },
+              required: ["title", "company", "location", "category", "salary", "deadline", "apply", "source_url", "description"],
+            },
+          },
+        },
+        required: ["jobs"],
+      },
+    },
+  ];
+
+  const messages: any[] = [{ role: "user", content: "Find this week's real job openings and save them." }];
+  const seen = new Map<string, string>();
+  for (let turn = 0; turn < 4; turn++) {
+    const res = await callClaude({ max_tokens: 8000, system, tools, messages, ...(opts.model ? { model: opts.model } : {}) });
+    for (const block of res.content || []) {
+      if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+        for (const r of block.content) if (r?.url) seen.set(r.url, r.title || r.url);
+      }
+    }
+    const save = (res.content || []).find((b: any) => b.type === "tool_use" && b.name === "save_jobs");
+    if (save) {
+      const jobs = Array.isArray(save.input?.jobs) ? save.input.jobs : [];
+      const out: WebJobDraft[] = [];
+      for (const j of jobs) {
+        const source_url = clampStr(j?.source_url, 500);
+        const apply = clampStr(j?.apply, 300);
+        const title = clampStr(j?.title, 120);
+        const description = clampStr(j?.description, 2400);
+        // Must come from a page the search actually returned, and must say how to apply.
+        if (!URL_RE.test(source_url) || !title || title.length < 5 || description.length < 20) continue;
+        const sameSite = [...seen.keys()].some((u) => { try { return new URL(u).hostname === new URL(source_url).hostname; } catch { return false; } });
+        if (!seen.has(source_url) && !sameSite) continue;
+        const applyOk = URL_RE.test(apply) || EMAIL_RE.test(apply) || TG_RE.test(apply);
+        const contact = applyOk && apply.length <= 120 ? apply : source_url.length <= 120 ? source_url : "";
+        if (!contact) continue;
+        const company = clampStr(j?.company, 80);
+        const location = clampStr(j?.location, 60);
+        const deadline = clampStr(j?.deadline, 60);
+        const extra = [
+          company && `🏢 ${company}`,
+          location && `📍 ${location}`,
+          deadline && `⏰ Deadline: ${deadline}`,
+          URL_RE.test(apply) && apply !== contact ? `📝 Apply: ${apply}` : "",
+          `🔗 Source: ${source_url}`,
+        ].filter(Boolean).join("\n");
+        out.push({
+          kind: "hiring",
+          title,
+          description: `${description}\n\n${extra}`.slice(0, 3000),
+          category: clampStr(j?.category, 60),
+          budget: clampStr(j?.salary, 60),
+          contact,
+          note: "",
+          company,
+          source_url,
+          source_title: seen.get(source_url) || company || source_url,
+        });
+        if (out.length >= count) break;
+      }
+      return out;
+    }
+    messages.push({ role: "assistant", content: res.content });
+    if (res.stop_reason === "pause_turn") continue;
+    messages.push({ role: "user", content: "Now call save_jobs with the real listings you found (or an empty list)." });
   }
   return [];
 }
