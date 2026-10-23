@@ -30,6 +30,18 @@ export async function createJob(db: SupabaseClient, kind: JobKind, origin: Origi
   return data.id as string;
 }
 
+/**
+ * The public address of the live site. On Netlify a request can arrive on a
+ * deploy-specific URL (abc123--site.netlify.app) that is password/SSO
+ * protected, so server-to-server calls and the Telegram webhook must use the
+ * production URL instead.
+ */
+export function publicOrigin(request: Request): string {
+  // Netlify sets URL to the main site address (also inside functions).
+  const prod = /^https:\/\//.test(process.env.URL || "") ? process.env.URL : "";
+  return (prod || new URL(request.url).origin).replace(/\/$/, "");
+}
+
 /** Ask Netlify to run the job in the background. Returns false when not on Netlify (e.g. localhost). */
 export async function queueJob(siteOrigin: string, id: string): Promise<boolean> {
   if (!jobSecret()) return false;

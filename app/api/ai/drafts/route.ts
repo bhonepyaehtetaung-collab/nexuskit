@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { isSameOrigin, rateLimit } from "@/lib/server/guard";
 import { aiConfigured, dailyModel, type AiImage } from "@/lib/server/ai";
 import { friendlyAiError } from "@/lib/server/drafts";
-import { createJob, queueJob, runJob, type JobKind } from "@/lib/server/jobs";
+import { createJob, publicOrigin, queueJob, runJob, type JobKind } from "@/lib/server/jobs";
 import { DAILY_MAX_SEARCHES, dailyCount } from "@/lib/server/daily";
 import { createServiceClient } from "@/lib/server/supabase-admin";
 
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     const extra = daily ? { daily: true, model: dailyModel(), count: await dailyCount(supabase as any), maxSearches: DAILY_MAX_SEARCHES } : {};
     const jobId = await createJob(supabase as any, kind, "dashboard", { text, topic, images, notify: body?.notify !== false, post_id: postId, ...extra }, auth.user.email || undefined);
     // On Netlify: background function (no 10 s limit). Locally: run now.
-    const queued = await queueJob(new URL(request.url).origin, jobId);
+    const queued = await queueJob(publicOrigin(request), jobId);
     if (!queued) await runJob(createServiceClient() ?? (supabase as any), jobId);
     return NextResponse.json({ job_id: jobId, queued });
   } catch (error) {

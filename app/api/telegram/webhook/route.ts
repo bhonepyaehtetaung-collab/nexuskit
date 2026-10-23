@@ -4,7 +4,7 @@ import { CATALOG_TAG } from "@/lib/server/public-db";
 import { timingSafeEqual } from "crypto";
 import { aiConfigured } from "@/lib/server/ai";
 import { friendlyAiError, tg, type DraftKind } from "@/lib/server/drafts";
-import { createJob, queueJob, runJob } from "@/lib/server/jobs";
+import { createJob, publicOrigin, queueJob, runJob } from "@/lib/server/jobs";
 import { createServiceClient } from "@/lib/server/supabase-admin";
 
 export const maxDuration = 120;
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       tg_file_id: photo?.file_id || doc?.file_id,
       tg_wait_id: waiting?.result?.message_id,
     }, "telegram");
-    const queued = await queueJob(new URL(request.url).origin, jobId);
+    const queued = await queueJob(publicOrigin(request), jobId);
     if (!queued) after(() => runJob(db, jobId));
   } catch (error) {
     await tg("sendMessage", { chat_id: owner, text: friendlyAiError(error) });

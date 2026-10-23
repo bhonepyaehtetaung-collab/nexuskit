@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { isSameOrigin } from "@/lib/server/guard";
 import { tg } from "@/lib/server/drafts";
+import { publicOrigin } from "@/lib/server/jobs";
 
 /**
  * POST /api/telegram/setup — super admin only.
@@ -17,7 +18,8 @@ export async function POST(request: Request) {
   const missing = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY"].filter((k) => !process.env[k]);
   if (missing.length) return NextResponse.json({ error: `.env ထဲမှာ မရှိသေးတာ: ${missing.join(", ")}` }, { status: 400 });
 
-  const origin = new URL(request.url).origin;
+  // Always the live address — never a protected deploy-preview URL.
+  const origin = publicOrigin(request);
   if (!origin.startsWith("https://") || /localhost|127\.0\.0\.1/.test(origin)) {
     return NextResponse.json({ error: "Telegram က localhost ကို မရောက်နိုင်ပါ။ Website ကို Netlify ပေါ် တင်ပြီးမှ ဒီခလုတ်ကို live site ကနေ နှိပ်ပါ။" }, { status: 400 });
   }
@@ -26,12 +28,13 @@ export async function POST(request: Request) {
     url: `${origin}/api/telegram/webhook`,
     secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
     allowed_updates: ["message", "callback_query"],
-    drop_pending_updates: true,
+    drop_pending_updates: false, // keep ✅/❌ taps made while the hook was broken
   });
   if (!res?.ok) return NextResponse.json({ error: res?.description || "setWebhook failed" }, { status: 502 });
   await tg("setMyCommands", {
     commands: [
       { command: "news", description: "Hub news draft (web search)" },
+      { command: "jobs", description: "Real job openings (web search)" },
       { command: "job", description: "Job post draft" },
       { command: "help", description: "How to use" },
     ],

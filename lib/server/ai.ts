@@ -273,6 +273,11 @@ export async function draftNews(opts: { topic?: string; products: string[]; exis
     const save = (res.content || []).find((b: any) => b.type === "tool_use" && b.name === "save_posts");
     if (save) {
       const posts = Array.isArray(save.input?.posts) ? save.input.posts : [];
+      if (seen.size === 0 && turn < 2) {
+        messages.push({ role: "assistant", content: res.content });
+        messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: save.id, is_error: true, content: "You have not searched yet. Run web_search first, then call save_posts with posts based only on what you found." }] });
+        continue;
+      }
       return posts.slice(0, count).flatMap((p: any): PostDraft[] => {
         const title = clampStr(p?.title, 160);
         const body = clampStr(p?.body, 20000);
@@ -316,7 +321,7 @@ export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?:
     "- Skip listings that ask applicants to pay a fee, look like scams/MLM, are expired/closed, or need a visa the reader is unlikely to have.",
     "- salary: only if the listing states it (keep the currency), else empty.",
     `Then call save_jobs once with up to ${count} jobs. For each: title (≤ 100 chars, English job title + company), company, location (e.g. \"Yangon\" or \"Remote\"), category (e.g. Design, IT, Marketing), salary, deadline (as stated or empty), apply, source_url, description (80–600 chars of Burmese in your own words: what the job is, key requirements, location/remote, and deadline if any).`,
-    "If you cannot find enough real listings, save fewer — an empty list is fine.",
+    "Always run web_search before saving (try several queries: Myanmar job sites, Yangon/Mandalay hiring, remote jobs open to Myanmar). If you still cannot find enough real listings, save fewer — an empty list is fine.",
   ].join("\n");
 
   const tools = [
@@ -363,6 +368,13 @@ export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?:
     const save = (res.content || []).find((b: any) => b.type === "tool_use" && b.name === "save_jobs");
     if (save) {
       const jobs = Array.isArray(save.input?.jobs) ? save.input.jobs : [];
+      // Smaller models sometimes give up before searching: make them look first.
+      if (seen.size === 0 && turn < 2) {
+        messages.push({ role: "assistant", content: res.content });
+        messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: save.id, is_error: true, content: "You have not searched yet. Run web_search first (e.g. 'Yangon jobs hiring', 'remote jobs Myanmar applicants', 'graphic designer job Myanmar'), then call save_jobs with the real listings you found." }] });
+        continue;
+      }
+      const dropped: string[] = [];
       const out: WebJobDraft[] = [];
       for (const j of jobs) {
         const source_url = clampStr(j?.source_url, 500);
@@ -370,12 +382,12 @@ export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?:
         const title = clampStr(j?.title, 120);
         const description = clampStr(j?.description, 2400);
         // Must come from a page the search actually returned, and must say how to apply.
-        if (!URL_RE.test(source_url) || !title || title.length < 5 || description.length < 20) continue;
+        if (!URL_RE.test(source_url) || !title || title.length < 5 || description.length < 20) { dropped.push(`incomplete: ${title.slice(0, 40)}`); continue; }
         const sameSite = [...seen.keys()].some((u) => { try { return new URL(u).hostname === new URL(source_url).hostname; } catch { return false; } });
-        if (!seen.has(source_url) && !sameSite) continue;
+        if (!seen.has(source_url) && !sameSite) { dropped.push(`unverified source: ${source_url.slice(0, 60)}`); continue; }
         const applyOk = URL_RE.test(apply) || EMAIL_RE.test(apply) || TG_RE.test(apply);
         const contact = applyOk && apply.length <= 120 ? apply : source_url.length <= 120 ? source_url : "";
-        if (!contact) continue;
+        if (!contact) { dropped.push(`no apply: ${title.slice(0, 40)}`); continue; }
         const company = clampStr(j?.company, 80);
         const location = clampStr(j?.location, 60);
         const deadline = clampStr(j?.deadline, 60);
@@ -400,6 +412,7 @@ export async function draftJobsFromWeb(opts: { existingTitles: string[]; count?:
         });
         if (out.length >= count) break;
       }
+      console.log(`jobs_web: ${seen.size} search results, ${jobs.length} proposed, ${out.length} kept${dropped.length ? ` — dropped: ${dropped.join(" | ")}` : ""}`);
       return out;
     }
     messages.push({ role: "assistant", content: res.content });
